@@ -1,19 +1,21 @@
 import { StyleSheet, Text, View } from 'react-native';
-import FeedList from '@/src/components/feed/FeedList';
 
-export default function HomeScreen() {
-  return <FeedList />;
+export default function EventsScreen() {
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Group</Text>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 12,
+    padding: 20,
     backgroundColor: '#FFFFFF',
   },
-  text: {
-    fontSize: 20,
+  title: {
+    fontSize: 24,
     fontWeight: '800',
     color: '#111111',
   },
