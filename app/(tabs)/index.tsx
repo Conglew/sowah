@@ -1,5 +1,5 @@
-import { StyleSheet, Text, View } from 'react-native';
-import FeedList from '@/src/components/feed/FeedList';
+import { StyleSheet, Text, View } from "react-native";
+import FeedList from "@/src/components/feed/FeedList";
 
 export default function HomeScreen() {
   return <FeedList />;
@@ -10,11 +10,11 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     paddingTop: 12,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
   },
   text: {
     fontSize: 20,
-    fontWeight: '800',
-    color: '#111111',
+    fontWeight: "800",
+    color: "#111111",
   },
 });

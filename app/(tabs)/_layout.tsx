@@ -1,7 +1,7 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
+import { Tabs } from "expo-router";
+import React from "react";
 
-import MainTabLayout from '@/src/components/layout/MainTabLayout';
+import MainTabLayout from "@/src/components/layout/MainTabLayout";
 
 export default function TabLayout() {
   return (
@@ -10,7 +10,7 @@ export default function TabLayout() {
         screenOptions={{
           headerShown: false,
           tabBarStyle: {
-            display: 'none',
+            display: "none",
           },
         }}
       >
