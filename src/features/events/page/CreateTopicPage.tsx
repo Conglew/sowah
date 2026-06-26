@@ -11,12 +11,14 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import EventDateTimePicker from "@/src/features/events/components/EventDateTimePicker";
+import ParticipantsPicker from "@/src/features/events/components/ParticipantsPicker";
 
 export default function CreateTopicPage() {
   const router = useRouter();
 
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState<Date | null>(null);
+  const [participantCount, setParticipantCount] = useState<number | null>(null);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
@@ -78,14 +80,10 @@ export default function CreateTopicPage() {
         <View style={styles.fieldGroup}>
           <Text style={styles.label}>Participants</Text>
 
-          <TouchableOpacity activeOpacity={0.75} style={styles.selectInput}>
-            <View style={styles.selectContent}>
-              <Text style={styles.selectIcon}>👤</Text>
-              <Text style={styles.selectPlaceholder}>2–6 Participants</Text>
-            </View>
-
-            <Text style={styles.chevron}>⌄</Text>
-          </TouchableOpacity>
+          <ParticipantsPicker
+            value={participantCount}
+            onChange={setParticipantCount}
+          />
         </View>
 
         <TouchableOpacity activeOpacity={0.8} style={styles.submitButton}>
