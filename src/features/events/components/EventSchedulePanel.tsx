@@ -85,9 +85,11 @@ export default function EventSchedulePanel({
   return (
     <View style={styles.panel}>
       <View style={styles.panelHeader}>
-        <View />
-
-        <TouchableOpacity activeOpacity={0.75} style={styles.createButton}>
+        <TouchableOpacity
+          activeOpacity={0.75}
+          style={styles.createButton}
+          onPress={onCreateEvent}
+        >
           <Text style={styles.createButtonText}>Create</Text>
           <Text style={styles.createButtonIcon}>＋</Text>
         </TouchableOpacity>
@@ -208,12 +210,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 12,
   },
-  // panelHeader: {
-  //   marginBottom: 12,
-  //   flexDirection: "row",
-  //   alignItems: "center",
-  //   justifyContent: "space-between",
-  // },
   panelTitle: {
     fontSize: 16,
     fontWeight: "800",
@@ -291,7 +287,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "flex-end",
   },
 
   createButton: {

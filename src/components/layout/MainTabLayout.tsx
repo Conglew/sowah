@@ -1,4 +1,5 @@
 import dayjs from "dayjs";
+import { useRouter } from "expo-router";
 import { ReactNode, useState } from "react";
 import { LayoutChangeEvent, StyleSheet, View } from "react-native";
 import { usePathname } from "expo-router";
@@ -9,7 +10,7 @@ import {
 
 import AppFooter from "./AppFooter";
 import AppHeader from "./AppHeader";
-import EventSchedulePanel from "@/src/components/event/EventSchedulePanel";
+import EventSchedulePanel from "@/src/features/events/components/EventSchedulePanel";
 
 type MainTabLayoutProps = {
   children: ReactNode;
@@ -51,6 +52,13 @@ export default function MainTabLayout({ children }: MainTabLayoutProps) {
     setIsEventPanelOpen(true);
   };
 
+  const router = useRouter();
+
+  const handleCreateEvent = () => {
+    setIsEventPanelOpen(false);
+    router.push("/create-topic");
+  };
+
   return (
     <View style={styles.root}>
       <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
@@ -81,6 +89,7 @@ export default function MainTabLayout({ children }: MainTabLayoutProps) {
             visible={isEventPanelOpen}
             selectedDate={selectedDate}
             onClose={() => setIsEventPanelOpen(false)}
+            onCreateEvent={handleCreateEvent}
           />
         </View>
       )}
