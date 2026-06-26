@@ -62,13 +62,13 @@ export default function DateStrip({
     if (listWidth <= 0) {
       return;
     }
-  
+
     const targetIndex = dates.findIndex((date) => date.id === selectedDate);
-  
+
     if (targetIndex < 0) {
       return;
     }
-  
+
     requestAnimationFrame(() => {
       listRef.current?.scrollToIndex({
         index: targetIndex,

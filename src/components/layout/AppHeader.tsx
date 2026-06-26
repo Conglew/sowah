@@ -1,3 +1,9 @@
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
+import { useEffect } from "react";
 import dayjs from "dayjs";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
@@ -9,15 +15,31 @@ type AppHeaderProps = {
   selectedDate: string;
   onDateChange: (dateId: string) => void;
   onJoinNewEvents: () => void;
+  isEventPanelOpen: boolean;
 };
 
 export default function AppHeader({
   selectedDate,
   onDateChange,
   onJoinNewEvents,
+  isEventPanelOpen,
 }: AppHeaderProps) {
   const currentMonth = dayjs(selectedDate).format("MMM").toUpperCase();
   const currentYear = dayjs(selectedDate).format("YYYY");
+
+  const joinButtonOpacity = useSharedValue(isEventPanelOpen ? 0 : 1);
+
+  useEffect(() => {
+    joinButtonOpacity.value = withTiming(isEventPanelOpen ? 0 : 1, {
+      duration: 120,
+    });
+  }, [isEventPanelOpen, joinButtonOpacity]);
+
+  const joinButtonAnimatedStyle = useAnimatedStyle(() => {
+    return {
+      opacity: joinButtonOpacity.value,
+    };
+  });
 
   return (
     <View style={styles.header}>
@@ -31,9 +53,15 @@ export default function AppHeader({
           <Text style={styles.yearText}>{currentYear}</Text>
         </View>
 
-        <TouchableOpacity activeOpacity={0.7} onPress={onJoinNewEvents}>
-          <Text style={styles.joinText}>JOIN NEW EVENTS</Text>
-        </TouchableOpacity>
+        <Animated.View style={joinButtonAnimatedStyle}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={onJoinNewEvents}
+            disabled={isEventPanelOpen}
+          >
+            <Text style={styles.joinText}>JOIN NEW EVENTS</Text>
+          </TouchableOpacity>
+        </Animated.View>
       </View>
 
       <DateStrip selectedDate={selectedDate} onDateChange={onDateChange} />

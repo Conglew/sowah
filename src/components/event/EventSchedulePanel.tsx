@@ -1,61 +1,81 @@
 import dayjs from "dayjs";
 import { useMemo } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 type EventSchedulePanelProps = {
   visible: boolean;
   selectedDate: string;
   onClose?: () => void;
+  onCreateEvent?: () => void;
 };
 
 type MockEvent = {
   id: string;
+  date: string;
   title: string;
   startTime: string;
   participantText: string;
   color: string;
+  isJoinedByMe: boolean;
 };
 
 const mockEvents: MockEvent[] = [
   {
     id: "event-1",
+    date: dayjs().format("YYYY-MM-DD"),
     title: "Small Talk",
     startTime: "09:00",
     participantText: "4/6",
     color: "#CFCFCF",
-  },
-  {
-    id: "event-2",
-    title: "What's on Your Bucket List?",
-    startTime: "10:30",
-    participantText: "3/5",
-    color: "#FF8A22",
-  },
-  {
-    id: "event-3",
-    title: "If Money Wasn't a Problem, What...",
-    startTime: "13:00",
-    participantText: "2/2",
-    color: "#45C86A",
+    isJoinedByMe: true,
   },
 ];
+
+const timeToMinutes = (time: string) => {
+  const [hour, minute] = time.split(":").map(Number);
+
+  return hour * 60 + minute;
+};
+
+const sortEventsByTime = (events: MockEvent[]) => {
+  return [...events].sort((a, b) => {
+    return timeToMinutes(a.startTime) - timeToMinutes(b.startTime);
+  });
+};
 
 export default function EventSchedulePanel({
   visible,
   selectedDate,
   onClose,
+  onCreateEvent,
 }: EventSchedulePanelProps) {
-  const timeSlots = useMemo(() => {
-    const startOfDay = dayjs(selectedDate).startOf("day");
-
-    return Array.from({ length: 48 }, (_, index) => {
-      const time = startOfDay.add(index * 30, "minute");
-
-      return {
-        id: time.format("HH:mm"),
-        timeText: time.format("HH:mm"),
-      };
+  const groupedEvents = useMemo(() => {
+    const eventsOfSelectedDate = mockEvents.filter((event) => {
+      return event.date === selectedDate;
     });
+
+    const yourEvents = sortEventsByTime(
+      eventsOfSelectedDate.filter((event) => event.isJoinedByMe),
+    );
+
+    const yourEventIds = new Set(yourEvents.map((event) => event.id));
+
+    const joinEvents = sortEventsByTime(
+      eventsOfSelectedDate.filter((event) => {
+        return !event.isJoinedByMe && !yourEventIds.has(event.id);
+      }),
+    );
+
+    return {
+      yourEvents,
+      joinEvents,
+    };
   }, [selectedDate]);
 
   if (!visible) {
@@ -65,12 +85,11 @@ export default function EventSchedulePanel({
   return (
     <View style={styles.panel}>
       <View style={styles.panelHeader}>
-        <Text style={styles.panelTitle}>
-          {dayjs(selectedDate).format("MMM D")} Events
-        </Text>
+        <View />
 
-        <TouchableOpacity activeOpacity={0.7} onPress={onClose}>
-          <Text style={styles.closeText}>Close</Text>
+        <TouchableOpacity activeOpacity={0.75} style={styles.createButton}>
+          <Text style={styles.createButtonText}>Create</Text>
+          <Text style={styles.createButtonIcon}>＋</Text>
         </TouchableOpacity>
       </View>
 
@@ -82,42 +101,100 @@ export default function EventSchedulePanel({
         alwaysBounceVertical={false}
         overScrollMode="never"
       >
-        {timeSlots.map((slot) => {
-          const event = mockEvents.find((item) => item.startTime === slot.timeText);
+        <EventSectionBlock
+          title="Your Events"
+          events={groupedEvents.yourEvents}
+        />
 
-          return (
-            <View key={slot.id} style={styles.slotRow}>
-              <Text style={styles.timeText}>{slot.timeText}</Text>
-
-              <View style={styles.eventArea}>
-                {event ? (
-                  <View style={styles.eventRow}>
-                    <View
-                      style={[
-                        styles.eventColorBar,
-                        { backgroundColor: event.color },
-                      ]}
-                    />
-
-                    <Text
-                      style={[styles.eventTitle, { color: event.color }]}
-                      numberOfLines={1}
-                    >
-                      {event.title}
-                    </Text>
-
-                    <Text style={[styles.participantText, { color: event.color }]}>
-                      {event.participantText}
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={styles.emptyLine} />
-                )}
-              </View>
-            </View>
-          );
-        })}
+        <EventSectionBlock
+          title="Join New Events"
+          events={groupedEvents.joinEvents}
+        />
       </ScrollView>
+    </View>
+  );
+}
+
+type EventSectionBlockProps = {
+  title: string;
+  events: MockEvent[];
+};
+
+function EventSectionBlock({ title, events }: EventSectionBlockProps) {
+  return (
+    <View style={styles.sectionBlock}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+
+      {events.length === 0 ? (
+        <Text style={styles.emptyText}>
+          No other events available on this day.
+        </Text>
+      ) : (
+        <View style={styles.eventList}>
+          {events.map((event) => {
+            return <EventRow key={event.id} event={event} />;
+          })}
+        </View>
+      )}
+    </View>
+  );
+}
+
+type EventRowProps = {
+  event: MockEvent;
+};
+
+function EventRow({ event }: EventRowProps) {
+  return (
+    <View style={styles.eventSlotRow}>
+      <Text style={styles.timeText}>{event.startTime}</Text>
+
+      <View style={styles.eventArea}>
+        <View style={styles.eventRow}>
+          <View
+            style={[
+              styles.eventColorBar,
+              {
+                backgroundColor: event.color,
+              },
+            ]}
+          />
+
+          <Text
+            style={[
+              styles.eventTitle,
+              {
+                color: event.color,
+              },
+            ]}
+            numberOfLines={1}
+          >
+            {event.title}
+          </Text>
+
+          <Text
+            style={[
+              styles.participantText,
+              {
+                color: event.color,
+              },
+            ]}
+          >
+            {event.participantText}
+          </Text>
+
+          <Text
+            style={[
+              styles.personIcon,
+              {
+                color: event.color,
+              },
+            ]}
+          >
+            ●
+          </Text>
+        </View>
+      </View>
     </View>
   );
 }
@@ -131,12 +208,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 12,
   },
-  panelHeader: {
-    marginBottom: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
+  // panelHeader: {
+  //   marginBottom: 12,
+  //   flexDirection: "row",
+  //   alignItems: "center",
+  //   justifyContent: "space-between",
+  // },
   panelTitle: {
     fontSize: 16,
     fontWeight: "800",
@@ -151,17 +228,29 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 94,
+    paddingBottom: 100,
   },
-  slotRow: {
-    minHeight: 34,
+  sectionBlock: {
+    marginBottom: 28,
+  },
+  sectionTitle: {
+    marginBottom: 14,
+    fontSize: 18,
+    fontWeight: "500",
+    color: "#111111",
+  },
+  eventList: {
+    gap: 10,
+  },
+  eventSlotRow: {
+    minHeight: 28,
     flexDirection: "row",
     alignItems: "center",
   },
   timeText: {
     width: 48,
-    fontSize: 11,
-    color: "#888888",
+    fontSize: 12,
+    color: "#6F6F6F",
   },
   eventArea: {
     flex: 1,
@@ -170,6 +259,9 @@ const styles = StyleSheet.create({
     minHeight: 24,
     flexDirection: "row",
     alignItems: "center",
+    borderBottomWidth: 1,
+    borderStyle: "dashed",
+    borderBottomColor: "#BDBDBD",
   },
   eventColorBar: {
     width: 6,
@@ -180,17 +272,50 @@ const styles = StyleSheet.create({
   eventTitle: {
     flex: 1,
     fontSize: 12,
-    fontWeight: "600",
+    fontWeight: "500",
   },
   participantText: {
     marginLeft: 8,
-    fontSize: 11,
-    fontWeight: "700",
+    fontSize: 12,
+    fontWeight: "500",
   },
-  emptyLine: {
-    height: 1,
-    borderBottomWidth: 1,
-    borderStyle: "dashed",
-    borderColor: "#DDDDDD",
+  personIcon: {
+    marginLeft: 6,
+    fontSize: 10,
+  },
+  emptyText: {
+    fontSize: 12,
+    color: "#AAAAAA",
+  },
+  panelHeader: {
+    marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  createButton: {
+    minWidth: 102,
+    height: 36,
+    paddingHorizontal: 16,
+    borderRadius: 13,
+    backgroundColor: "#111111",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  createButtonText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#FFFFFF",
+  },
+
+  createButtonIcon: {
+    marginLeft: 3,
+    fontSize: 28,
+    lineHeight: 30,
+    fontWeight: "300",
+    color: "#FFFFFF",
   },
 });

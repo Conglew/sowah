@@ -2,7 +2,10 @@ import dayjs from "dayjs";
 import { ReactNode, useState } from "react";
 import { LayoutChangeEvent, StyleSheet, View } from "react-native";
 import { usePathname } from "expo-router";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 
 import AppFooter from "./AppFooter";
 import AppHeader from "./AppHeader";
@@ -14,14 +17,15 @@ type MainTabLayoutProps = {
 
 const HIDE_HEADER_PATHS = ["/group", "/private", "/profile"];
 
-
 export default function MainTabLayout({ children }: MainTabLayoutProps) {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
 
   const shouldHideHeader = HIDE_HEADER_PATHS.includes(pathname);
 
-  const [selectedDate, setSelectedDate] = useState(dayjs().format("YYYY-MM-DD"));
+  const [selectedDate, setSelectedDate] = useState(
+    dayjs().format("YYYY-MM-DD"),
+  );
   const [isEventPanelOpen, setIsEventPanelOpen] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
 
@@ -56,6 +60,7 @@ export default function MainTabLayout({ children }: MainTabLayoutProps) {
               selectedDate={selectedDate}
               onDateChange={handleDateChange}
               onJoinNewEvents={handleJoinNewEvents}
+              isEventPanelOpen={isEventPanelOpen}
             />
           </View>
         )}
