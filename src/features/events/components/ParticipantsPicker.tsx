@@ -1,6 +1,12 @@
 import { Picker } from "@react-native-picker/picker";
 import { useState } from "react";
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 type ParticipantsPickerProps = {
   value: number | null;

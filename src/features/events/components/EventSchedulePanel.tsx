@@ -9,6 +9,8 @@ import {
   View,
 } from "react-native";
 
+import { getCountryFlag } from "@/src/shared/utils/country-flag";
+
 type EventSchedulePanelProps = {
   visible: boolean;
   selectedDate: string;
@@ -19,7 +21,7 @@ type EventSchedulePanelProps = {
 type MockParticipant = {
   id: string;
   name: string;
-  flag: string;
+  countryCode: string;
 };
 
 type MockEvent = {
@@ -51,22 +53,22 @@ const mockEvents: MockEvent[] = [
       {
         id: "participant-1",
         name: "cutty_fram",
-        flag: "🇹🇼",
+        countryCode: "TW",
       },
       {
         id: "participant-2",
         name: "samijma_184",
-        flag: "🇹🇭",
+        countryCode: "TH",
       },
       {
         id: "participant-3",
         name: "mika_092",
-        flag: "🇯🇵",
+        countryCode: "JP",
       },
       {
         id: "participant-4",
         name: "leo_travel",
-        flag: "🇺🇸",
+        countryCode: "US",
       },
     ],
   },
@@ -84,17 +86,17 @@ const mockEvents: MockEvent[] = [
       {
         id: "participant-5",
         name: "amy_life",
-        flag: "🇹🇼",
+        countryCode: "TW",
       },
       {
         id: "participant-6",
         name: "ken_trip",
-        flag: "🇯🇵",
+        countryCode: "JP",
       },
       {
         id: "participant-7",
         name: "nora_88",
-        flag: "🇰🇷",
+        countryCode: "KR",
       },
     ],
   },
@@ -112,12 +114,12 @@ const mockEvents: MockEvent[] = [
       {
         id: "participant-8",
         name: "hana_green",
-        flag: "🇹🇼",
+        countryCode: "TW",
       },
       {
         id: "participant-9",
         name: "yuki_121",
-        flag: "🇯🇵",
+        countryCode: "JP",
       },
     ],
   },
@@ -135,12 +137,12 @@ const mockEvents: MockEvent[] = [
       {
         id: "participant-10",
         name: "cutty_fram",
-        flag: "🇹🇼",
+        countryCode: "TW",
       },
       {
         id: "participant-11",
         name: "samijma_184",
-        flag: "🇹🇭",
+        countryCode: "TH",
       },
     ],
   },
@@ -297,7 +299,8 @@ function EventSectionBlock({
         <View style={styles.eventList}>
           {events.map((event) => {
             const isExpanded = expandedEventId === event.id;
-            const isParticipantListVisible = participantListEventId === event.id;
+            const isParticipantListVisible =
+              participantListEventId === event.id;
 
             return (
               <EventRow
@@ -404,10 +407,7 @@ function EventRow({
               <View style={styles.participantList}>
                 {event.participants.map((participant) => {
                   return (
-                    <View
-                      key={participant.id}
-                      style={styles.participantRow}
-                    >
+                    <View key={participant.id} style={styles.participantRow}>
                       <View style={styles.avatarCircle}>
                         <Text style={styles.avatarText}>
                           {participant.name.slice(0, 1).toUpperCase()}
@@ -419,7 +419,7 @@ function EventRow({
                       </Text>
 
                       <Text style={styles.participantFlag}>
-                        {participant.flag}
+                        {getCountryFlag(participant.countryCode)}
                       </Text>
                     </View>
                   );
@@ -435,10 +435,7 @@ function EventRow({
               <TouchableOpacity
                 activeOpacity={0.8}
                 disabled={isFull}
-                style={[
-                  styles.joinButton,
-                  isFull && styles.joinButtonDisabled,
-                ]}
+                style={[styles.joinButton, isFull && styles.joinButtonDisabled]}
               >
                 <Text style={styles.joinButtonText}>Join</Text>
               </TouchableOpacity>
@@ -460,6 +457,34 @@ const styles = StyleSheet.create({
     borderTopColor: "#E6E6E6",
     paddingHorizontal: 20,
     paddingTop: 12,
+  },
+  panelHeader: {
+    marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "flex-end",
+  },
+  createButton: {
+    minWidth: 102,
+    height: 36,
+    paddingHorizontal: 16,
+    borderRadius: 13,
+    backgroundColor: "#111111",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  createButtonText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#FFFFFF",
+  },
+  createButtonIcon: {
+    marginLeft: 3,
+    fontSize: 28,
+    lineHeight: 30,
+    fontWeight: "300",
+    color: "#FFFFFF",
   },
   scrollArea: {
     flex: 1,
@@ -529,12 +554,6 @@ const styles = StyleSheet.create({
   },
   expandedContent: {
     paddingTop: 10,
-    paddingLeft: 0,
-  },
-  discussionGuideText: {
-    fontSize: 13,
-    lineHeight: 20,
-    color: "#A8A8A8",
   },
   participantList: {
     marginBottom: 12,
@@ -567,6 +586,11 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 18,
   },
+  discussionGuideText: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: "#A8A8A8",
+  },
   joinButton: {
     height: 40,
     marginTop: 16,
@@ -592,33 +616,5 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 12,
     color: "#AAAAAA",
-  },
-  panelHeader: {
-    marginBottom: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "flex-end",
-  },
-  createButton: {
-    minWidth: 102,
-    height: 36,
-    paddingHorizontal: 16,
-    borderRadius: 13,
-    backgroundColor: "#111111",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  createButtonText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#FFFFFF",
-  },
-  createButtonIcon: {
-    marginLeft: 3,
-    fontSize: 28,
-    lineHeight: 30,
-    fontWeight: "300",
-    color: "#FFFFFF",
   },
 });
