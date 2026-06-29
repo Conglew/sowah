@@ -1,5 +1,5 @@
 import { FlashList } from "@shopify/flash-list";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   LayoutChangeEvent,
   RefreshControl,
@@ -7,6 +7,8 @@ import {
   Text,
   View,
 } from "react-native";
+
+import { useHomeFeedControlStore } from "@/src/features/home/stores/home-feed-control.store";
 
 type MockPost = {
   id: string;
@@ -25,6 +27,13 @@ const createMockPosts = (): MockPost[] => {
 };
 
 export default function FeedList() {
+  const listRef = useRef<FlashList<MockPost>>(null);
+  const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const resetFeedToken = useHomeFeedControlStore(
+    (state) => state.resetFeedToken,
+  );
+
   const [refreshing, setRefreshing] = useState(false);
   const [refreshCount, setRefreshCount] = useState(0);
   const [listHeight, setListHeight] = useState(0);
@@ -53,18 +62,49 @@ export default function FeedList() {
     }));
   }, [refreshCount]);
 
-  const handleRefresh = useCallback(() => {
+  const refreshPosts = useCallback(() => {
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+    }
+
     setRefreshing(true);
 
-    setTimeout(() => {
+    refreshTimeoutRef.current = setTimeout(() => {
       setRefreshCount((prev) => prev + 1);
       setRefreshing(false);
+      refreshTimeoutRef.current = null;
     }, 1200);
+  }, []);
+
+  const handleRefresh = useCallback(() => {
+    refreshPosts();
+  }, [refreshPosts]);
+
+  useEffect(() => {
+    if (resetFeedToken === 0) {
+      return;
+    }
+
+    listRef.current?.scrollToOffset({
+      offset: 0,
+      animated: true,
+    });
+
+    refreshPosts();
+  }, [resetFeedToken, refreshPosts]);
+
+  useEffect(() => {
+    return () => {
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+    };
   }, []);
 
   return (
     <View style={styles.container} onLayout={handleLayout}>
       <FlashList
+        ref={listRef}
         data={posts}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}

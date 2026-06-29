@@ -1,6 +1,6 @@
 import dayjs from "dayjs";
 import { useRouter } from "expo-router";
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { LayoutChangeEvent, StyleSheet, View } from "react-native";
 import { usePathname } from "expo-router";
 import {
@@ -11,6 +11,7 @@ import {
 import AppFooter from "./AppFooter";
 import AppHeader from "./AppHeader";
 import EventSchedulePanel from "@/src/features/events/components/EventSchedulePanel";
+import { useHomeFeedControlStore } from "@/src/features/home/stores/home-feed-control.store";
 
 type MainTabLayoutProps = {
   children: ReactNode;
@@ -22,6 +23,18 @@ export default function MainTabLayout({ children }: MainTabLayoutProps) {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
 
+  const resetFeedToken = useHomeFeedControlStore(
+    (state) => state.resetFeedToken,
+  );
+
+  useEffect(() => {
+    if (resetFeedToken === 0) {
+      return;
+    }
+  
+    setIsEventPanelOpen(false);
+  }, [resetFeedToken]);
+
   const shouldHideHeader = HIDE_HEADER_PATHS.includes(pathname);
 
   const [selectedDate, setSelectedDate] = useState(
@@ -29,6 +42,7 @@ export default function MainTabLayout({ children }: MainTabLayoutProps) {
   );
   const [isEventPanelOpen, setIsEventPanelOpen] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(0);
+  
 
   const handleHeaderLayout = (event: LayoutChangeEvent) => {
     const nextHeight = event.nativeEvent.layout.height;

@@ -1,6 +1,8 @@
 import { router, usePathname } from "expo-router";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
+import { useHomeFeedControlStore } from "@/src/features/home/stores/home-feed-control.store";
+
 type FooterItem = {
   label: string;
   icon: string;
@@ -33,12 +35,24 @@ const footerItems: FooterItem[] = [
 export default function AppFooter() {
   const pathname = usePathname();
 
+  const requestHomeFeedReset = useHomeFeedControlStore(
+    (state) => state.requestHomeFeedReset,
+  );
+
   const isActive = (path: FooterItem["path"]) => {
     if (path === "/(tabs)") {
       return pathname === "/" || pathname === "/index";
     }
 
     return pathname.includes(path.replace("/(tabs)", ""));
+  };
+
+  const handleFooterItemPress = (item: FooterItem) => {
+    if (item.path === "/(tabs)") {
+      requestHomeFeedReset();
+    }
+
+    router.push(item.path);
   };
 
   return (
@@ -52,7 +66,7 @@ export default function AppFooter() {
               key={item.path}
               activeOpacity={0.75}
               style={styles.footerItem}
-              onPress={() => router.push(item.path)}
+              onPress={() => handleFooterItemPress(item)}
             >
               <Text style={[styles.iconText, active && styles.iconTextActive]}>
                 {item.icon}
@@ -65,7 +79,6 @@ export default function AppFooter() {
       <TouchableOpacity
         activeOpacity={0.85}
         style={styles.playButton}
-        // onPress={() => router.push('/(tabs)/private')}
       >
         <Text style={styles.playText}>PLAY</Text>
         <Text style={styles.playSubText}>1V1 MATCH</Text>
@@ -80,7 +93,7 @@ export default function AppFooter() {
               key={item.path}
               activeOpacity={0.75}
               style={styles.footerItem}
-              onPress={() => router.push(item.path)}
+              onPress={() => handleFooterItemPress(item)}
             >
               <Text style={[styles.iconText, active && styles.iconTextActive]}>
                 {item.icon}

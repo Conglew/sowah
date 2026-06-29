@@ -35,8 +35,13 @@ type MockEvent = {
   discussionGuide: string;
   participants: MockParticipant[];
 };
-
 const todayId = dayjs().format("YYYY-MM-DD");
+const tomorrowId = dayjs().add(1, "day").format("YYYY-MM-DD");
+const twoDaysLaterId = dayjs().add(2, "day").format("YYYY-MM-DD");
+const yesterdayId = dayjs().subtract(1, "day").format("YYYY-MM-DD");
+
+const nextAvailableTime = dayjs().add(1, "hour").minute(0).second(0);
+const laterAvailableTime = dayjs().add(2, "hour").minute(30).second(0);
 
 const mockEvents: MockEvent[] = [
   {
@@ -50,100 +55,118 @@ const mockEvents: MockEvent[] = [
     discussionGuide:
       "1. What topic would you like to talk about today? 2. What made your day memorable? 3. What would you like to share with others?",
     participants: [
-      {
-        id: "participant-1",
-        name: "cutty_fram",
-        countryCode: "TW",
-      },
-      {
-        id: "participant-2",
-        name: "samijma_184",
-        countryCode: "TH",
-      },
-      {
-        id: "participant-3",
-        name: "mika_092",
-        countryCode: "JP",
-      },
-      {
-        id: "participant-4",
-        name: "leo_travel",
-        countryCode: "US",
-      },
+      { id: "participant-1", name: "cutty_fram", countryCode: "TW" },
+      { id: "participant-2", name: "samijma_184", countryCode: "TH" },
+      { id: "participant-3", name: "mika_092", countryCode: "JP" },
+      { id: "participant-4", name: "leo_travel", countryCode: "US" },
     ],
   },
   {
     id: "event-2",
     date: todayId,
-    title: "What's on Your Bucket List?",
-    startTime: "10:30",
-    color: "#FF7A00",
-    isJoinedByMe: true,
-    maxParticipants: 5,
+    title: "Language Exchange: Travel English",
+    startTime: nextAvailableTime.format("HH:mm"),
+    color: "#4A90E2",
+    isJoinedByMe: false,
+    maxParticipants: 6,
     discussionGuide:
-      "1. What is one thing you really want to do in your life? 2. Why is it meaningful to you? 3. Who would you like to experience it with?",
+      "1. What English phrases do you use when traveling? 2. Have you ever had trouble communicating abroad? 3. What travel situation do you want to practice?",
     participants: [
-      {
-        id: "participant-5",
-        name: "amy_life",
-        countryCode: "TW",
-      },
-      {
-        id: "participant-6",
-        name: "ken_trip",
-        countryCode: "JP",
-      },
-      {
-        id: "participant-7",
-        name: "nora_88",
-        countryCode: "KR",
-      },
+      { id: "participant-5", name: "emily_words", countryCode: "US" },
+      { id: "participant-6", name: "ryo_study", countryCode: "JP" },
+      { id: "participant-7", name: "minji_lang", countryCode: "KR" },
     ],
   },
   {
     id: "event-3",
     date: todayId,
-    title: "If Money Wasn't a Problem, What...",
-    startTime: "13:30",
-    color: "#45C86A",
-    isJoinedByMe: true,
-    maxParticipants: 2,
+    title: "Weekend Plans",
+    startTime: laterAvailableTime.format("HH:mm"),
+    color: "#A8A8A8",
+    isJoinedByMe: false,
+    maxParticipants: 3,
     discussionGuide:
-      "1. If money was not a problem, what would you do first? 2. Where would you go? 3. What kind of life would you like to build?",
+      "1. What are your plans for this weekend? 2. Will you stay home or go somewhere? 3. What kind of weekend helps you recharge?",
     participants: [
-      {
-        id: "participant-8",
-        name: "hana_green",
-        countryCode: "TW",
-      },
-      {
-        id: "participant-9",
-        name: "yuki_121",
-        countryCode: "JP",
-      },
+      { id: "participant-8", name: "sora_daily", countryCode: "SG" },
+      { id: "participant-9", name: "mimi_talks", countryCode: "MY" },
+      { id: "participant-10", name: "jun_park", countryCode: "KR" },
     ],
   },
   {
     id: "event-4",
     date: todayId,
-    title: "The Most Memorable Person in Your Life",
-    startTime: "14:00",
-    color: "#606060",
+    title: "Past Event: Morning Coffee Chat",
+    startTime: "00:00",
+    color: "#B48A5A",
     isJoinedByMe: false,
-    maxParticipants: 3,
+    maxParticipants: 4,
     discussionGuide:
-      "1. Who is the most memorable person in your life? 2. How did you meet this person? 3. What makes this person memorable? 4. Did this person change your life in any way? 5. What qualities do you admire most about them? 6. How often do you see or talk to them now?",
+      "1. How do you usually start your morning? 2. Do you prefer coffee, tea, or something else? 3. What small habit makes your day better?",
     participants: [
-      {
-        id: "participant-10",
-        name: "cutty_fram",
-        countryCode: "TW",
-      },
-      {
-        id: "participant-11",
-        name: "samijma_184",
-        countryCode: "TH",
-      },
+      { id: "participant-11", name: "coffee_ken", countryCode: "JP" },
+      { id: "participant-12", name: "lin_morning", countryCode: "TW" },
+    ],
+  },
+  {
+    id: "event-5",
+    date: tomorrowId,
+    title: "Food Memories",
+    startTime: "11:00",
+    color: "#FF9F43",
+    isJoinedByMe: false,
+    maxParticipants: 5,
+    discussionGuide:
+      "1. What food reminds you of home? 2. Who made it for you? 3. Is there a dish you want others to try?",
+    participants: [
+      { id: "participant-13", name: "thai_foodie", countryCode: "TH" },
+      { id: "participant-14", name: "viet_taste", countryCode: "VN" },
+    ],
+  },
+  {
+    id: "event-6",
+    date: yesterdayId,
+    title: "Book Recommendations",
+    startTime: "21:00",
+    color: "#8E44AD",
+    isJoinedByMe: false,
+    maxParticipants: 5,
+    discussionGuide:
+      "1. What book would you recommend to others? 2. What did it teach you? 3. Do you prefer fiction, non-fiction, or essays?",
+    participants: [
+      { id: "participant-15", name: "book_mai", countryCode: "VN" },
+      { id: "participant-16", name: "reader_sam", countryCode: "SG" },
+    ],
+  },
+  {
+    id: "event-7",
+    date: twoDaysLaterId,
+    title: "Career Talk: First Job Stories",
+    startTime: "10:00",
+    color: "#6C5CE7",
+    isJoinedByMe: true,
+    maxParticipants: 4,
+    discussionGuide:
+      "1. What was your first job? 2. What did you learn from it? 3. What advice would you give to someone starting their career?",
+    participants: [
+      { id: "participant-17", name: "work_jason", countryCode: "TW" },
+      { id: "participant-18", name: "aiko_design", countryCode: "JP" },
+      { id: "participant-19", name: "dev_park", countryCode: "KR" },
+    ],
+  },
+  {
+    id: "event-8",
+    date: twoDaysLaterId,
+    title: "Music That Changed Your Mood",
+    startTime: "16:30",
+    color: "#E84393",
+    isJoinedByMe: false,
+    maxParticipants: 6,
+    discussionGuide:
+      "1. What song can instantly change your mood? 2. When did you first hear it? 3. Do you prefer lyrics, melody, or rhythm?",
+    participants: [
+      { id: "participant-20", name: "music_lee", countryCode: "KR" },
+      { id: "participant-21", name: "aya_song", countryCode: "JP" },
     ],
   },
 ];
@@ -158,6 +181,38 @@ const sortEventsByTime = (events: MockEvent[]) => {
   return [...events].sort((a, b) => {
     return timeToMinutes(a.startTime) - timeToMinutes(b.startTime);
   });
+};
+
+const getEventDateTime = (event: MockEvent) => {
+  return dayjs(`${event.date} ${event.startTime}`, "YYYY-MM-DD HH:mm");
+};
+
+const isEventExpired = (event: MockEvent) => {
+  return getEventDateTime(event).isBefore(dayjs());
+};
+
+const isEventFull = (event: MockEvent) => {
+  return event.participants.length >= event.maxParticipants;
+};
+
+const canJoinEvent = (event: MockEvent) => {
+  return !event.isJoinedByMe && !isEventExpired(event) && !isEventFull(event);
+};
+
+const getJoinDisabledReason = (event: MockEvent) => {
+  if (event.isJoinedByMe) {
+    return "Already joined";
+  }
+
+  if (isEventExpired(event)) {
+    return "This event has already started.";
+  }
+
+  if (isEventFull(event)) {
+    return "This event is full.";
+  }
+
+  return null;
 };
 
 export default function EventSchedulePanel({
@@ -338,7 +393,8 @@ function EventRow({
   onToggleParticipants,
 }: EventRowProps) {
   const participantText = `${event.participants.length}/${event.maxParticipants}`;
-  const isFull = event.participants.length >= event.maxParticipants;
+  const joinDisabledReason = getJoinDisabledReason(event);
+  const isJoinDisabled = !canJoinEvent(event);
 
   return (
     <TouchableOpacity
@@ -432,13 +488,26 @@ function EventRow({
             </Text>
 
             {!event.isJoinedByMe && (
-              <TouchableOpacity
-                activeOpacity={0.8}
-                disabled={isFull}
-                style={[styles.joinButton, isFull && styles.joinButtonDisabled]}
-              >
-                <Text style={styles.joinButtonText}>Join</Text>
-              </TouchableOpacity>
+              <>
+                {joinDisabledReason && (
+                  <Text style={styles.joinDisabledReason}>
+                    {joinDisabledReason}
+                  </Text>
+                )}
+
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  disabled={isJoinDisabled}
+                  style={[
+                    styles.joinButton,
+                    isJoinDisabled && styles.joinButtonDisabled,
+                  ]}
+                >
+                  <Text style={styles.joinButtonText}>
+                    {isJoinDisabled ? "Unavailable" : "Join"}
+                  </Text>
+                </TouchableOpacity>
+              </>
             )}
 
             <View style={styles.expandedDivider} />
@@ -598,6 +667,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#FF7A00",
     alignItems: "center",
     justifyContent: "center",
+  },
+  joinDisabledReason: {
+    marginTop: 12,
+    fontSize: 12,
+    lineHeight: 17,
+    color: "#AAAAAA",
   },
   joinButtonDisabled: {
     backgroundColor: "#D8D8D8",
