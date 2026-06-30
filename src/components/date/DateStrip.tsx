@@ -30,8 +30,6 @@ export default function DateStrip({
 }: DateStripProps) {
   const listRef = useRef<FlatList<DateItem>>(null);
 
-  // const todayId = dayjs().format('YYYY-MM-DD');
-  // const [selectedDate, setSelectedDate] = useState(todayId);
   const [listWidth, setListWidth] = useState(0);
 
   const dates = useMemo<DateItem[]>(() => {
@@ -90,31 +88,6 @@ export default function DateStrip({
     });
   };
 
-  //   const scrollToWeek = (direction: 'prev' | 'next') => {
-  //     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-  //     const currentIndex = dates.findIndex((date) => date.id === selectedDate);
-
-  //     const nextIndex =
-  //       direction === 'prev'
-  //         ? Math.max(currentIndex - 7, 0)
-  //         : Math.min(currentIndex + 7, dates.length - 1);
-
-  //     const nextDate = dates[nextIndex];
-
-  //     if (!nextDate) {
-  //       return;
-  //     }
-
-  //     setSelectedDate(nextDate.id);
-
-  //     listRef.current?.scrollToIndex({
-  //       index: nextIndex,
-  //       animated: true,
-  //       viewPosition: 0,
-  //     });
-  //   };
-
   const scrollToDate = (direction: "prev" | "next") => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
@@ -135,7 +108,6 @@ export default function DateStrip({
       return;
     }
 
-    // setSelectedDate(nextDate.id);
     onDateChange(nextDate.id);
 
     listRef.current?.scrollToIndex({
@@ -191,7 +163,6 @@ export default function DateStrip({
                   style={[styles.dateItem, { width: itemWidth }]}
                   onPress={() => {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    // setSelectedDate(item.id);
                     onDateChange(item.id);
                   }}
                 >

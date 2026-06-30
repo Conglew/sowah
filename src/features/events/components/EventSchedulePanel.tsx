@@ -1,4 +1,5 @@
 import dayjs from "dayjs";
+import customParseFormat from "dayjs/plugin/customParseFormat";
 import { useMemo, useState } from "react";
 import {
   GestureResponderEvent,
@@ -10,6 +11,8 @@ import {
 } from "react-native";
 
 import { getCountryFlag } from "@/src/shared/utils/country-flag";
+
+dayjs.extend(customParseFormat);
 
 type EventSchedulePanelProps = {
   visible: boolean;

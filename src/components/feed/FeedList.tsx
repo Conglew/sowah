@@ -1,4 +1,4 @@
-import { FlashList } from "@shopify/flash-list";
+import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   LayoutChangeEvent,
@@ -27,7 +27,7 @@ const createMockPosts = (): MockPost[] => {
 };
 
 export default function FeedList() {
-  const listRef = useRef<FlashList<MockPost>>(null);
+  const listRef = useRef<FlashListRef<MockPost>>(null);
   const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const resetFeedToken = useHomeFeedControlStore(

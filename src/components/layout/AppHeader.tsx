@@ -7,9 +7,8 @@ import { useEffect } from "react";
 import dayjs from "dayjs";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
-import DateStrip from "@/src/components/date/DataStrip";
+import DateStrip from "@/src/components/date/DateStrip";
 import SowahLogo from "@/src/assets/images/sowah-logo.svg";
-// import { red } from "react-native-reanimated/lib/typescript/Colors";
 
 type AppHeaderProps = {
   selectedDate: string;
