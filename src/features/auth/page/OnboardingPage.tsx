@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Platform, StyleSheet, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import OnboardingCarousel from "@/src/features/auth/components/OnboardingCarousel";
@@ -10,6 +10,7 @@ import { useAuthStore } from "@/src/stores/auth.store";
 export default function OnboardingPage() {
   const status = useAuthStore((state) => state.status);
   const signIn = useAuthStore((state) => state.signIn);
+  const error = useAuthStore((state) => state.error);
 
   const [pendingProvider, setPendingProvider] = useState<AuthProvider | null>(
     null,
@@ -35,27 +36,29 @@ export default function OnboardingPage() {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
-      <View style={styles.carouselArea}>
+      <View style={styles.content}>
         <OnboardingCarousel />
-      </View>
 
-      <View style={styles.actions}>
-        <SocialLoginButton
-          label="Continue with Google"
-          onPress={() => handleSignIn("google")}
-          disabled={isAuthenticating}
-          loading={pendingProvider === "google"}
-        />
+        <View style={styles.actions}>
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-        {/* Apple 原生登入僅 iOS 支援；如需在 Android 開發時也顯示，移除此 Platform 判斷即可 */}
-        {Platform.OS === "ios" && (
           <SocialLoginButton
-            label="Continue with Apple"
-            onPress={() => handleSignIn("apple")}
+            label="Continue with Google"
+            onPress={() => handleSignIn("google")}
             disabled={isAuthenticating}
-            loading={pendingProvider === "apple"}
+            loading={pendingProvider === "google"}
           />
-        )}
+
+          {/* Apple 原生登入僅 iOS 支援；如需在 Android 開發時也顯示，移除此 Platform 判斷即可 */}
+          {Platform.OS === "ios" && (
+            <SocialLoginButton
+              label="Continue with Apple"
+              onPress={() => handleSignIn("apple")}
+              disabled={isAuthenticating}
+              loading={pendingProvider === "apple"}
+            />
+          )}
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -66,12 +69,29 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#FFFFFF",
   },
-  carouselArea: {
+
+  // 舊：輪播吃滿上方、按鈕固定貼底（保留備用，後續可能改回這個樣式）
+  // carouselArea: {
+  //   flex: 1,
+  // },
+
+  // 新：logo + 文字 + dots + 按鈕整組垂直置中，按鈕緊貼 Slide 下方
+  content: {
     flex: 1,
+    justifyContent: "center",
+    transform: [{ translateY: -70 }], // 整組（logo+文字+dots+按鈕）往上移；不想上移就移除這行
   },
   actions: {
+    marginTop: 28,
     paddingHorizontal: 30,
-    paddingBottom: 24,
     gap: 12,
+    // 舊（貼底時使用）：
+    // paddingBottom: 24,
+  },
+  errorText: {
+    marginBottom: 4,
+    fontSize: 12,
+    textAlign: "center",
+    color: "#E04A4A",
   },
 });

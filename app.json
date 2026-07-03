@@ -11,7 +11,18 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.shancong.sowah",
-      "appleTeamId": "FM3W5STXB3"
+      "appleTeamId": "FM3W5STXB3",
+      "usesAppleSignIn": true,
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSExceptionDomains": {
+            "sowah-dev.nova-el.com": {
+              "NSExceptionAllowsInsecureHTTPLoads": true,
+              "NSIncludesSubdomains": true
+            }
+          }
+        }
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -51,7 +62,15 @@
       "@react-native-community/datetimepicker",
       "expo-audio",
       "expo-web-browser",
-      "expo-asset"
+      "expo-asset",
+      "expo-apple-authentication",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.58985145212-lpcfn9f53t1k9n1hvm7r9n7scd8n8o6g"
+        }
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,
