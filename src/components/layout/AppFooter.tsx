@@ -1,33 +1,52 @@
 import { router, usePathname } from "expo-router";
+import type { FC } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import type { SvgProps } from "react-native-svg";
+
+import ChatIcon from "@/src/assets/icons/chat_icon.svg";
+import ChatIconActive from "@/src/assets/icons/chat_icon_slc.svg";
+import GroupIcon from "@/src/assets/icons/group_icon.svg";
+import GroupIconActive from "@/src/assets/icons/group_icon_slc.svg";
+import HomeIcon from "@/src/assets/icons/home_icon.svg";
+import HomeIconActive from "@/src/assets/icons/home_icon_slc.svg";
+// TODO: 補上 profile 這組 svg，否則以下兩行 import 會失敗
+import ProfileIcon from "@/src/assets/icons/profile_icon.svg";
+import ProfileIconActive from "@/src/assets/icons/profile_icon_slc.svg";
 
 import { useHomeFeedControlStore } from "@/src/features/home/stores/home-feed-control.store";
 
 type FooterItem = {
   label: string;
-  icon: string;
+  Icon: FC<SvgProps>;
+  ActiveIcon: FC<SvgProps>;
   path: "/(tabs)" | "/(tabs)/group" | "/(tabs)/private" | "/(tabs)/profile";
 };
+
+const ICON_SIZE = 26;
 
 const footerItems: FooterItem[] = [
   {
     label: "Home",
-    icon: "⌂",
+    Icon: HomeIcon,
+    ActiveIcon: HomeIconActive,
     path: "/(tabs)",
   },
   {
     label: "Group",
-    icon: "♚",
+    Icon: GroupIcon,
+    ActiveIcon: GroupIconActive,
     path: "/(tabs)/group",
   },
   {
     label: "Private",
-    icon: "✈",
+    Icon: ChatIcon,
+    ActiveIcon: ChatIconActive,
     path: "/(tabs)/private",
   },
   {
     label: "Profile",
-    icon: "●",
+    Icon: ProfileIcon,
+    ActiveIcon: ProfileIconActive,
     path: "/(tabs)/profile",
   },
 ];
@@ -55,52 +74,37 @@ export default function AppFooter() {
     router.push(item.path);
   };
 
+  const renderItem = (item: FooterItem) => {
+    const active = isActive(item.path);
+    const Icon = active ? item.ActiveIcon : item.Icon;
+
+    return (
+      <TouchableOpacity
+        key={item.path}
+        activeOpacity={0.75}
+        style={styles.footerItem}
+        onPress={() => handleFooterItemPress(item)}
+        accessibilityRole="button"
+        accessibilityLabel={item.label}
+      >
+        <Icon width={ICON_SIZE} height={ICON_SIZE} />
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <View style={styles.footer}>
       <View style={styles.sideItems}>
-        {footerItems.slice(0, 2).map((item) => {
-          const active = isActive(item.path);
-
-          return (
-            <TouchableOpacity
-              key={item.path}
-              activeOpacity={0.75}
-              style={styles.footerItem}
-              onPress={() => handleFooterItemPress(item)}
-            >
-              <Text style={[styles.iconText, active && styles.iconTextActive]}>
-                {item.icon}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+        {footerItems.slice(0, 2).map(renderItem)}
       </View>
 
-      <TouchableOpacity
-        activeOpacity={0.85}
-        style={styles.playButton}
-      >
+      <TouchableOpacity activeOpacity={0.85} style={styles.playButton}>
         <Text style={styles.playText}>PLAY</Text>
         <Text style={styles.playSubText}>1V1 MATCH</Text>
       </TouchableOpacity>
 
       <View style={styles.sideItems}>
-        {footerItems.slice(2).map((item) => {
-          const active = isActive(item.path);
-
-          return (
-            <TouchableOpacity
-              key={item.path}
-              activeOpacity={0.75}
-              style={styles.footerItem}
-              onPress={() => handleFooterItemPress(item)}
-            >
-              <Text style={[styles.iconText, active && styles.iconTextActive]}>
-                {item.icon}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+        {footerItems.slice(2).map(renderItem)}
       </View>
     </View>
   );
@@ -127,13 +131,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  iconText: {
-    fontSize: 26,
-    color: "#111111",
-  },
-  iconTextActive: {
-    color: "#FF8A22",
-  },
   playButton: {
     width: 76,
     height: 76,
@@ -145,10 +142,7 @@ const styles = StyleSheet.create({
     borderWidth: 6,
     borderColor: "#FFE4C7",
     shadowColor: "#FF8A22",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 10,
     elevation: 8,

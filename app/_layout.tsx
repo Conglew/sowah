@@ -7,7 +7,7 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
-import { StyleSheet } from "react-native";
+import { StyleSheet, View } from "react-native";
 import Animated, {
   runOnJS,
   useAnimatedStyle,
@@ -17,6 +17,7 @@ import Animated, {
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import AppLoadingScreen from "@/src/components/common/AppLoadingScreen";
+import { useAppResumeLoading } from "@/src/hooks/useAppResumeLoading";
 import { useAuthStore } from "@/src/stores/auth.store";
 
 export const unstable_settings = {
@@ -33,6 +34,8 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   const status = useAuthStore((state) => state.status);
   const bootstrap = useAuthStore((state) => state.bootstrap);
+
+  const isResuming = useAppResumeLoading({ minVisibleMs: 1500 });
 
   const [minTimePassed, setMinTimePassed] = useState(false);
   const [showLoader, setShowLoader] = useState(true);
@@ -102,6 +105,13 @@ export default function RootLayout() {
         >
           <AppLoadingScreen />
         </Animated.View>
+      )}
+
+      {/* 回前台 loading */}
+      {isResuming && (
+        <View style={StyleSheet.absoluteFill}>
+          <AppLoadingScreen />
+        </View>
       )}
 
       <StatusBar style="auto" />
