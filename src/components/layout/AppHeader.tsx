@@ -1,14 +1,26 @@
+import dayjs from "dayjs";
+import { useEffect } from "react";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import { useEffect } from "react";
-import dayjs from "dayjs";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
-import DateStrip from "@/src/components/date/DateStrip";
 import SowahLogo from "@/src/assets/images/sowah-logo.svg";
+import DateStrip from "@/src/components/date/DateStrip";
+
+// logo 區固定高度：logo 64 + 上下留白。profile.tsx 需要對齊時可 import 這個值。
+export const LOGO_HEADER_HEIGHT = 78;
+
+/** 只有 SoWah logo 的 header 區塊，AppHeader 與 profile 頁共用。 */
+export function AppLogoHeader() {
+  return (
+    <View style={styles.logoOnlyArea}>
+      <SowahLogo width={127} height={64} />
+    </View>
+  );
+}
 
 type AppHeaderProps = {
   selectedDate: string;
@@ -42,9 +54,8 @@ export default function AppHeader({
 
   return (
     <View style={styles.header}>
-      <View style={styles.logoArea}>
-        <SowahLogo width={127} height={64} />
-      </View>
+      {/* 共用的 logo 區 */}
+      <AppLogoHeader />
 
       <View style={styles.monthRow}>
         <View style={styles.monthTextRow}>
@@ -70,15 +81,15 @@ export default function AppHeader({
 
 const styles = StyleSheet.create({
   header: {
-    paddingTop: 8,
     paddingHorizontal: 20,
     paddingBottom: 8,
     backgroundColor: "#FFFFFF",
   },
-  logoArea: {
+  logoOnlyArea: {
+    height: LOGO_HEADER_HEIGHT,
+    paddingTop: 8, // 對齊 AppHeader 的 header.paddingTop，讓 logo 位置一致
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 6,
   },
   monthRow: {
     flexDirection: "row",
