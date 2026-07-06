@@ -70,7 +70,13 @@
           "iosUrlScheme": "com.googleusercontent.apps.58985145212-lpcfn9f53t1k9n1hvm7r9n7scd8n8o6g"
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "允許 SoWah 存取相簿以設定你的頭像。"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

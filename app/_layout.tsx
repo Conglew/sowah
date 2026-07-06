@@ -24,6 +24,10 @@ export const unstable_settings = {
 // loading 畫面至少停留的時間（毫秒）
 const MIN_SPLASH_MS = 2000;
 
+// ⚠️ 預覽用：設 true 會強制顯示 onboarding 填資料畫面（不做真正登入判斷）。
+// 預覽完請改回 false 或刪除這段與下方 effectiveStatus。
+const FORCE_ONBOARDING_PREVIEW = true;
+
 // 一啟動就收掉原生 splash，改由自訂 AppLoadingScreen 接手
 void SplashScreen.hideAsync();
 
@@ -45,8 +49,11 @@ export default function RootLayout() {
     return () => clearTimeout(timer);
   }, []);
 
+  // ⚠️ 預覽覆寫：強制成 onboarding，方便在模擬器直接看填資料畫面
+  const effectiveStatus = FORCE_ONBOARDING_PREVIEW ? "onboarding" : status;
+
   // 兩個條件都滿足才進 App：bootstrap 完成（status 已定案）且至少停留 MIN_SPLASH_MS
-  const isReady = status !== "idle" && minTimePassed;
+  const isReady = effectiveStatus !== "idle" && minTimePassed;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -56,15 +63,15 @@ export default function RootLayout() {
         >
           {/* App 內容永遠渲染，讓 loading 淡出後直接露出正確畫面 */}
           <Stack>
-            <Stack.Protected guard={status === "unauthenticated"}>
+            <Stack.Protected guard={effectiveStatus === "unauthenticated"}>
               <Stack.Screen name="(auth)" options={{ headerShown: false }} />
             </Stack.Protected>
 
-            <Stack.Protected guard={status === "onboarding"}>
+            <Stack.Protected guard={effectiveStatus === "onboarding"}>
               <Stack.Screen name="(setup)" options={{ headerShown: false }} />
             </Stack.Protected>
 
-            <Stack.Protected guard={status === "authenticated"}>
+            <Stack.Protected guard={effectiveStatus === "authenticated"}>
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
               <Stack.Screen
                 name="modal"
