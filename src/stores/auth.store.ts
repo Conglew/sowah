@@ -2,7 +2,11 @@ import { create } from "zustand";
 
 import { authApi } from "@/src/features/auth/api/auth.api";
 import { authService } from "@/src/features/auth/services/auth.service";
-import type { AuthProvider, AuthStatus, AuthUser } from "@/src/features/auth/types";
+import type {
+  AuthProvider,
+  AuthStatus,
+  AuthUser,
+} from "@/src/features/auth/types";
 import { usersApi } from "@/src/features/profile/api/users.api";
 import {
   setAccessToken,

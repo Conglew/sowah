@@ -1,5 +1,5 @@
 import { Image } from "expo-image";
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo } from "react";
 import {
   FlatList,
   Pressable,
@@ -8,10 +8,17 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
-import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeOut,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { haptics } from "@/src/shared/utils/haptics";
 import { colors } from "@/src/theme/colors";
 import type { GalleryMonth, GalleryPhoto } from "../types/profile.types";
 
@@ -19,41 +26,59 @@ const COLUMNS = 4;
 const H_PADDING = 16;
 const GAP = 8;
 
-
 // 堆疊要顯示幾張後卡（含 hero 外的張數）。要更豐富就加大。
 const STACK_BACK_COUNT = 8;
 
-// 依 index 生成散落(scatter)的 transform：越後面越往下、左右交錯、旋轉加大
-function getScatterTransform(i: number) {
-  // 左右交錯：偶數往右、奇數往左
-  const side = i % 2 === 0 ? 1 : -1;
-  // 每往後一張，往下累積位移
-  const ty = 40 + i * 46;
-  // 左右偏移隨層數擴大，帶點隨機感（用 index 當 seed 讓每次一致）
-  const tx = side * (18 + (i % 3) * 26);
-  // 旋轉左右交錯、逐層加大
-  const rotate = side * (4 + i * 1.6);
-  // 越後面越小
-  const scale = Math.max(0.8, 0.99 - i * 0.02);
+// 堆疊模式卡片固定尺寸
+const HERO_WIDTH = 287;
+const HERO_HEIGHT = 348.33;
 
-  return {
-    transform: [
-      { translateX: tx },
-      { translateY: ty },
-      { rotate: `${rotate}deg` },
-      { scale },
-    ],
-  };
+// 堆疊整體往上移的量（越大越上；受 topInset 影響，太大會壓到瀏海區）
+const STACK_TOP_OFFSET = 50;
+
+// 每張後卡進場的間隔（毫秒），做出 cascade（層層展開）效果
+const STACK_STAGGER = 55;
+
+// 依 seed 產生穩定的偽亂數 0..1（同一張卡每次結果一致，不會每次 render 跳動）
+function seededRandom(seed: number) {
+  const x = Math.sin(seed * 127.1 + 311.7) * 43758.5453;
+  return x - Math.floor(x);
 }
 
-type GalleryMode = "stack" | "grid";
+// 依 index 生成散落 transform：以「往下」為主 + 左右展開 + 大幅度隨機旋轉，
+// 方向不嚴格交錯，讓卡片像隨手往下丟、更隨性。回傳原始數值供進場動畫插值。
+function getScatterTransform(i: number) {
+  const r1 = seededRandom(i + 1);
+  const r2 = seededRandom(i + 7);
+  const r3 = seededRandom(i + 13);
+  const r4 = seededRandom(i + 23);
+
+  // 方向改成隨機（不再嚴格左右交錯），更隨性
+  const side = r4 > 0.5 ? 1 : -1;
+
+  // 以往下為主：下降幅度加大 + 隨機
+  const ty = 28 + i * 36 + (r1 - 0.5) * 46;
+  // 左右展開 + 較大隨機，避免整體垂直疊在一起
+  const tx = side * (22 + i * 12) + (r2 - 0.5) * 60;
+  // 旋轉幅度更大且更隨機
+  const rotate = side * (8 + i * 2.2) + (r3 - 0.5) * 18;
+  const scale = Math.max(0.8, 0.98 - i * 0.02);
+
+  return { tx, ty, rotate, scale };
+}
+
+export type GalleryMode = "stack" | "grid";
 
 type Props = {
   months: GalleryMonth[];
   /** 折疊時卡片露出的高度（px），拿來當底部 padding，避免最後幾張被卡片蓋住 */
   collapsedSheetHeight: number;
-  /** 初始模式，預設堆疊 */
-  initialMode?: GalleryMode;
+  /** 目前模式（由 ProfileView 依 bottom sheet 位置控制） */
+  mode: GalleryMode;
+  /** 點擊堆疊整體時觸發（切換到 grid） */
+  onRequestGrid?: () => void;
+  /** 每次變動即重播堆疊進場動畫（由 ProfileView 於 focus 時遞增） */
+  playToken?: number;
 };
 
 /**
@@ -65,11 +90,12 @@ type Props = {
 function ProfileBackgroundGalleryBase({
   months,
   collapsedSheetHeight,
-  initialMode = "stack",
+  mode,
+  onRequestGrid,
+  playToken,
 }: Props) {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const [mode, setMode] = useState<GalleryMode>(initialMode);
 
   const tileSize = useMemo(
     () => (width - H_PADDING * 2 - GAP * (COLUMNS - 1)) / COLUMNS,
@@ -83,11 +109,6 @@ function ProfileBackgroundGalleryBase({
       .sort((a, b) => b.takenAt.localeCompare(a.takenAt));
   }, [months]);
 
-  const toggleMode = (next: GalleryMode) => {
-    haptics.selection();
-    setMode(next);
-  };
-
   return (
     <View style={StyleSheet.absoluteFill}>
       {mode === "stack" ? (
@@ -99,10 +120,10 @@ function ProfileBackgroundGalleryBase({
         >
           <StackedDeck
             photos={flatPhotos}
-            screenWidth={width}
             topInset={insets.top}
             collapsedSheetHeight={collapsedSheetHeight}
-            onPress={() => toggleMode("grid")}
+            onPress={onRequestGrid}
+            playToken={playToken}
           />
         </Animated.View>
       ) : (
@@ -110,14 +131,14 @@ function ProfileBackgroundGalleryBase({
           key="grid"
           entering={FadeIn.duration(220)}
           exiting={FadeOut.duration(160)}
-          style={StyleSheet.absoluteFill}
+          style={[StyleSheet.absoluteFill, styles.gridBackground]}
         >
           <FlatList
             data={months}
             keyExtractor={(m) => m.key}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{
-              paddingTop: insets.top + 8,
+              paddingTop: insets.top - STACK_TOP_OFFSET,
               // 讓最後一列能捲到卡片上方
               paddingBottom: collapsedSheetHeight + 24,
             }}
@@ -152,15 +173,6 @@ function ProfileBackgroundGalleryBase({
               </View>
             )}
           />
-
-          {/* 切回堆疊的小按鈕（截圖沒有，可自行刪除或改樣式） */}
-          <Pressable
-            style={[styles.backToStackBtn, { top: insets.top + 8 }]}
-            onPress={() => toggleMode("stack")}
-            hitSlop={8}
-          >
-            <Text style={styles.backToStackIcon}>▢</Text>
-          </Pressable>
         </Animated.View>
       )}
     </View>
@@ -169,22 +181,21 @@ function ProfileBackgroundGalleryBase({
 
 type StackedDeckProps = {
   photos: GalleryPhoto[];
-  screenWidth: number;
   topInset: number;
   collapsedSheetHeight: number;
-  onPress: () => void;
+  /** 點擊堆疊區任一處觸發（切換到 grid） */
+  onPress?: () => void;
+  /** 變動即重播進場動畫 */
+  playToken?: number;
 };
 
 function StackedDeck({
   photos,
-  screenWidth,
   topInset,
   collapsedSheetHeight,
   onPress,
+  playToken,
 }: StackedDeckProps) {
-  const heroWidth = screenWidth * 0.72;
-  const heroHeight = heroWidth * 1.32; // 直式 3:4 左右
-
   const hero = photos[0];
   const backCards = photos.slice(1, 1 + STACK_BACK_COUNT);
 
@@ -193,64 +204,132 @@ function StackedDeck({
   }
 
   return (
-    <View
+    <Pressable
+      onPress={onPress}
       style={[
         styles.stackContainer,
-        { paddingTop: topInset + 0, paddingBottom: collapsedSheetHeight },
+        {
+          paddingTop: topInset - STACK_TOP_OFFSET,
+          paddingBottom: collapsedSheetHeight,
+        },
       ]}
     >
-      <Pressable onPress={onPress} style={styles.stackPressable}>
-        <View style={{ width: heroWidth, height: heroHeight }}>
-          {/* 後面的卡片：由遠到近畫，最後畫 hero 疊最上層 */}
-          {backCards
-  .map((photo, i) => {
-    const scatter = getScatterTransform(i);
-    return (
-      <View
-        key={photo.id}
-        style={[
-          styles.stackCard,
-          {
-            width: heroWidth,
-            height: heroHeight,
-            opacity: Math.max(0.35, 0.9 - i * 0.08), // 越後面越淡
-            transform: scatter.transform,
-            zIndex: -(i + 1),
-          },
-        ]}
-      >
-        <Image
-          source={{ uri: photo.uri }}
-          style={styles.stackCardImage}
-          contentFit="cover"
-          cachePolicy="memory-disk"
-          recyclingKey={photo.id}
-        />
-      </View>
-    );
-  })
-  .reverse()}
-
-          {/* hero（最上層） */}
-          <View
-            style={[
-              styles.stackCard,
-              styles.stackHero,
-              { width: heroWidth, height: heroHeight },
-            ]}
-          >
-            <Image
-              source={{ uri: hero.uri }}
-              style={styles.stackCardImage}
-              contentFit="cover"
-              transition={150}
-              cachePolicy="memory-disk"
-              recyclingKey={hero.id}
+      <View style={{ width: HERO_WIDTH, height: HERO_HEIGHT }}>
+        {/* 後卡：由遠到近畫（reverse），進場時從疊合處展開到散落位置 */}
+        {backCards
+          .map((photo, i) => (
+            <StackCard
+              key={photo.id}
+              photo={photo}
+              index={i}
+              playToken={playToken}
             />
-          </View>
-        </View>
-      </Pressable>
-    </View>
+          ))
+          .reverse()}
+
+        {/* hero（最上層） */}
+        <HeroCard photo={hero} playToken={playToken} />
+      </View>
+    </Pressable>
+  );
+}
+
+type StackCardProps = {
+  photo: GalleryPhoto;
+  index: number;
+  playToken?: number;
+};
+
+// 後卡：進場時 progress 0→1，把散落 transform 與 opacity 一起插值出來
+function StackCard({ photo, index, playToken }: StackCardProps) {
+  const progress = useSharedValue(0);
+  const target = useMemo(() => getScatterTransform(index), [index]);
+  const finalOpacity = Math.max(0.35, 0.9 - index * 0.08);
+
+  useEffect(() => {
+    progress.value = 0;
+    // 每張卡延遲與時長各自帶隨機 → 更隨性、不整齊劃一
+    const delay = index * STACK_STAGGER + seededRandom(index + 31) * 70;
+    const duration = 380 + seededRandom(index + 41) * 260;
+    // ease-out timing：先快後慢「甩出去」、無回彈
+    progress.value = withDelay(
+      delay,
+      withTiming(1, { duration, easing: Easing.out(Easing.cubic) }),
+    );
+  }, [playToken, index, progress]);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const p = progress.value;
+    return {
+      opacity: finalOpacity * p,
+      transform: [
+        { translateX: target.tx * p },
+        { translateY: target.ty * p },
+        { rotate: `${target.rotate * p}deg` },
+        { scale: 1 + (target.scale - 1) * p },
+      ],
+    };
+  });
+
+  return (
+    <Animated.View
+      style={[
+        styles.stackCard,
+        { width: HERO_WIDTH, height: HERO_HEIGHT, zIndex: -(index + 1) },
+        animatedStyle,
+      ]}
+    >
+      <Image
+        source={{ uri: photo.uri }}
+        style={styles.stackCardImage}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+        recyclingKey={photo.id}
+      />
+    </Animated.View>
+  );
+}
+
+type HeroCardProps = {
+  photo: GalleryPhoto;
+  playToken?: number;
+};
+
+// hero：進場時淡入 + 輕微放大
+function HeroCard({ photo, playToken }: HeroCardProps) {
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    progress.value = 0;
+    progress.value = withTiming(1, {
+      duration: 360,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [playToken, progress]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: [{ scale: 0.94 + 0.06 * progress.value }],
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        styles.stackCard,
+        styles.stackHero,
+        { width: HERO_WIDTH, height: HERO_HEIGHT },
+        animatedStyle,
+      ]}
+    >
+      <Image
+        source={{ uri: photo.uri }}
+        style={styles.stackCardImage}
+        contentFit="cover"
+        transition={150}
+        cachePolicy="memory-disk"
+        recyclingKey={photo.id}
+      />
+    </Animated.View>
   );
 }
 
@@ -262,11 +341,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "flex-start",
-    backgroundColor: "#FFFFFF"
-  },
-  stackPressable: {
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
   },
   stackCard: {
     position: "absolute",
@@ -289,6 +364,9 @@ const styles = StyleSheet.create({
   },
 
   // ---- grid 模式 ----
+  gridBackground: {
+    backgroundColor: "#FFFFFF",
+  },
   monthBlock: {
     paddingHorizontal: H_PADDING,
     marginBottom: 20,
@@ -325,22 +403,5 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(0,0,0,0.6)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
-  },
-
-  // ---- 切回堆疊按鈕 ----
-  backToStackBtn: {
-    position: "absolute",
-    right: 16,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(0,0,0,0.35)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  backToStackIcon: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "700",
   },
 });

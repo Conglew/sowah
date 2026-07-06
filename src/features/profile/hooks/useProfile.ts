@@ -1,9 +1,6 @@
 import { useEffect, useState } from "react";
 
-import {
-    buildMockOtherProfile,
-    MOCK_SELF_PROFILE,
-} from "../data/mock-profile";
+import { buildMockOtherProfile, MOCK_SELF_PROFILE } from "../data/mock-profile";
 import type { Profile, ProfileVariant } from "../types/profile.types";
 
 type UseProfileArgs = {
@@ -24,7 +21,10 @@ type UseProfileResult = {
  *   other -> GET /users/:userId
  * 畫面層（ProfileView / ProfileCard / Gallery）完全不用動。
  */
-export function useProfile({ variant, userId }: UseProfileArgs): UseProfileResult {
+export function useProfile({
+  variant,
+  userId,
+}: UseProfileArgs): UseProfileResult {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);

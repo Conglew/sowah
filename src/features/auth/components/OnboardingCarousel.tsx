@@ -30,7 +30,8 @@ const ONBOARDING_SLIDES: OnboardingSlide[] = [
   },
   {
     key: "slide-3",
-    tagline: "Practice by speaking, not just studying.\nStart your first talk!!",
+    tagline:
+      "Practice by speaking, not just studying.\nStart your first talk!!",
   },
 ];
 

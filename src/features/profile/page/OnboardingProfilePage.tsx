@@ -103,7 +103,10 @@ export default function OnboardingProfilePage() {
 
         <TouchableOpacity
           activeOpacity={0.8}
-          style={[styles.submitButton, !canSubmit && styles.submitButtonDisabled]}
+          style={[
+            styles.submitButton,
+            !canSubmit && styles.submitButtonDisabled,
+          ]}
           onPress={handleSubmit}
           disabled={!canSubmit}
         >

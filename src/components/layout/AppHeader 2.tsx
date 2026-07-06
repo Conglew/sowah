@@ -9,7 +9,6 @@ import Animated, {
 
 import SowahLogo from "@/src/assets/images/sowah-logo.svg";
 import DateStrip from "@/src/components/date/DateStrip";
-import { colors } from "@/src/theme/colors";
 
 // logo 區固定高度：logo 64 + 上下留白。profile.tsx 需要對齊時可 import 這個值。
 export const LOGO_HEADER_HEIGHT = 78;
@@ -111,7 +110,7 @@ const styles = StyleSheet.create({
   yearText: {
     fontSize: 20,
     fontWeight: "800",
-    color: colors.brandLight,
+    color: "#FF9F5A",
   },
   joinText: {
     fontSize: 11,
