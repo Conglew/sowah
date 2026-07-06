@@ -26,7 +26,7 @@ const MIN_SPLASH_MS = 2000;
 
 // ⚠️ 預覽用：設 true 會強制顯示 onboarding 填資料畫面（不做真正登入判斷）。
 // 預覽完請改回 false 或刪除這段與下方 effectiveStatus。
-const FORCE_ONBOARDING_PREVIEW = true;
+const FORCE_ONBOARDING_PREVIEW = false;
 
 // 一啟動就收掉原生 splash，改由自訂 AppLoadingScreen 接手
 void SplashScreen.hideAsync();
