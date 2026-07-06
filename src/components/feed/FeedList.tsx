@@ -9,6 +9,7 @@ import {
 } from "react-native";
 
 import { useHomeFeedControlStore } from "@/src/features/home/stores/home-feed-control.store";
+import { colors } from "@/src/theme/colors";
 
 type MockPost = {
   id: string;
@@ -113,8 +114,8 @@ export default function FeedList() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="#FF8A22"
-            colors={["#FF8A22"]}
+            tintColor={colors.brand}
+            colors={[colors.brand]}
           />
         }
         renderItem={({ item }) => {

@@ -12,6 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { usersApi } from "@/src/features/profile/api/users.api";
 import { useAuthStore } from "@/src/stores/auth.store";
 import { useProfileStore } from "@/src/stores/profile.store";
+import { colors } from "@/src/theme/colors";
 
 function getStatusCode(error: unknown): number | undefined {
   if (typeof error === "object" && error !== null && "response" in error) {
@@ -166,7 +167,7 @@ const styles = StyleSheet.create({
     height: 48,
     marginTop: 8,
     borderRadius: 24,
-    backgroundColor: "#FF7A00",
+    backgroundColor: colors.brandStrong,
     alignItems: "center",
     justifyContent: "center",
   },

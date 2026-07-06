@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { colors } from "@/src/theme/colors";
 import EventDateTimePicker from "@/src/features/events/components/EventDateTimePicker";
 import ParticipantsPicker from "@/src/features/events/components/ParticipantsPicker";
 
@@ -194,7 +195,7 @@ const styles = StyleSheet.create({
     height: 35,
     marginTop: 7,
     borderRadius: 9,
-    backgroundColor: "#FF7A00",
+    backgroundColor: colors.brandStrong,
     alignItems: "center",
     justifyContent: "center",
   },

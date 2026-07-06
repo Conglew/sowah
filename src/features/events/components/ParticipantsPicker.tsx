@@ -8,6 +8,8 @@ import {
   View,
 } from "react-native";
 
+import { colors } from "@/src/theme/colors";
+
 type ParticipantsPickerProps = {
   value: number | null;
   onChange: (value: number) => void;
@@ -145,6 +147,6 @@ const styles = StyleSheet.create({
   doneButtonText: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#FF7A00",
+    color: colors.brandStrong,
   },
 });

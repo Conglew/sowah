@@ -1,5 +1,4 @@
 import BottomSheet, { BottomSheetScrollView } from "@gorhom/bottom-sheet";
-import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useMemo, useRef } from "react";
 import {
@@ -10,6 +9,7 @@ import {
     useWindowDimensions,
 } from "react-native";
 
+import { haptics } from "@/src/shared/utils/haptics";
 import { useProfile } from "../hooks/useProfile";
 import type { ProfileVariant } from "../types/profile.types";
 import { ProfileBackgroundGallery } from "./ProfileBackgroundGallery";
@@ -68,7 +68,7 @@ export function ProfileView({ variant, userId }: Props) {
         onChange={(index) => {
           // 每次 snap 定位給一下最輕的系統選取回饋
           if (index >= 0) {
-            void Haptics.selectionAsync();
+            haptics.selection();
           }
         }}
         handleIndicatorStyle={styles.handleIndicator}

@@ -14,6 +14,7 @@ import ProfileIcon from "@/src/assets/icons/profile_icon.svg";
 import ProfileIconActive from "@/src/assets/icons/profile_icon_slc.svg";
 
 import { useHomeFeedControlStore } from "@/src/features/home/stores/home-feed-control.store";
+import { colors } from "@/src/theme/colors";
 
 type FooterItem = {
   label: string;
@@ -136,12 +137,12 @@ const styles = StyleSheet.create({
     height: 76,
     borderRadius: 38,
     marginHorizontal: 10,
-    backgroundColor: "#FF8A22",
+    backgroundColor: colors.brand,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 6,
     borderColor: "#FFE4C7",
-    shadowColor: "#FF8A22",
+    shadowColor: colors.brand,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 10,

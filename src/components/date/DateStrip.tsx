@@ -1,5 +1,4 @@
 import dayjs from "dayjs";
-import * as Haptics from "expo-haptics";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   FlatList,
@@ -9,6 +8,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
+import { haptics } from "@/src/shared/utils/haptics";
+import { colors } from "@/src/theme/colors";
 
 type DateItem = {
   id: string;
@@ -89,7 +91,7 @@ export default function DateStrip({
   };
 
   const scrollToDate = (direction: "prev" | "next") => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptics.light();
 
     const currentIndex = dates.findIndex((date) => date.id === selectedDate);
 
@@ -162,7 +164,7 @@ export default function DateStrip({
                   activeOpacity={0.75}
                   style={[styles.dateItem, { width: itemWidth }]}
                   onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    haptics.light();
                     onDateChange(item.id);
                   }}
                 >
@@ -236,7 +238,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   dateCircleActive: {
-    backgroundColor: "#FFA15C",
+    backgroundColor: colors.brandSoft,
   },
   dateNumber: {
     fontSize: 15,

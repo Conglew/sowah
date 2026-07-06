@@ -10,6 +10,7 @@ import {
 } from "react-native";
 
 import SowahLogo from "@/src/assets/images/sowah-cover.svg";
+import { colors } from "@/src/theme/colors";
 
 type OnboardingSlide = {
   key: string;
@@ -192,6 +193,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#E0E0E0",
   },
   dotActive: {
-    backgroundColor: "#FF8A22",
+    backgroundColor: colors.brand,
   },
 });

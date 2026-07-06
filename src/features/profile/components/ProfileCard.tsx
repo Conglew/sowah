@@ -1,8 +1,9 @@
-import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { getCountryFlag } from "@/src/shared/utils/country-flag";
+import { haptics } from "@/src/shared/utils/haptics";
+import { colors } from "@/src/theme/colors";
 import type {
   CheckInDay,
   MoreContentItem,
@@ -87,7 +88,7 @@ function Actions({
   onPressSecondary?: () => void;
 }) {
   const handlePress = (fn?: () => void) => {
-    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptics.light();
     fn?.();
   };
 
@@ -195,9 +196,7 @@ function CheckIn({
         ]}
         android_ripple={{ color: "#FFFFFF22" }}
         onPress={() => {
-          void Haptics.notificationAsync(
-            Haptics.NotificationFeedbackType.Success,
-          );
+          haptics.success();
           onPressCheckIn?.();
         }}
       >
@@ -226,7 +225,7 @@ function MoreContents({
           ]}
           android_ripple={{ color: "#00000010" }}
           onPress={() => {
-            void Haptics.selectionAsync();
+            haptics.selection();
             onPress?.(item);
           }}
         >
@@ -243,8 +242,6 @@ function MoreContents({
     </View>
   );
 }
-
-const ORANGE = "#FF8A22";
 
 const styles = StyleSheet.create({
   root: {
@@ -327,7 +324,7 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 44,
     fontWeight: "800",
-    color: ORANGE,
+    color: colors.brand,
     lineHeight: 48,
   },
   statRank: {
@@ -364,7 +361,7 @@ const styles = StyleSheet.create({
   checkInBadgeToday: {
     backgroundColor: "#FFE9D3",
     borderWidth: 2,
-    borderColor: ORANGE,
+    borderColor: colors.brand,
   },
   checkInReward: {
     fontSize: 13,
@@ -425,7 +422,7 @@ const styles = StyleSheet.create({
   moreReward: {
     fontSize: 14,
     fontWeight: "700",
-    color: ORANGE,
+    color: colors.brand,
   },
   moreChevron: {
     fontSize: 22,

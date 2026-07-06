@@ -11,6 +11,7 @@ import {
 } from "react-native";
 
 import { getCountryFlag } from "@/src/shared/utils/country-flag";
+import { colors } from "@/src/theme/colors";
 
 dayjs.extend(customParseFormat);
 
@@ -116,7 +117,7 @@ const mockEvents: MockEvent[] = [
     date: tomorrowId,
     title: "Food Memories",
     startTime: "11:00",
-    color: "#FF9F43",
+    color: colors.brandWarm,
     isJoinedByMe: false,
     maxParticipants: 5,
     discussionGuide:
@@ -667,7 +668,7 @@ const styles = StyleSheet.create({
     height: 40,
     marginTop: 16,
     borderRadius: 10,
-    backgroundColor: "#FF7A00",
+    backgroundColor: colors.brandStrong,
     alignItems: "center",
     justifyContent: "center",
   },

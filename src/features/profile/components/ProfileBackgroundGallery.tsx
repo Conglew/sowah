@@ -1,4 +1,3 @@
-import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { memo, useMemo, useState } from "react";
 import {
@@ -12,6 +11,8 @@ import {
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { haptics } from "@/src/shared/utils/haptics";
+import { colors } from "@/src/theme/colors";
 import type { GalleryMonth, GalleryPhoto } from "../types/profile.types";
 
 const COLUMNS = 4;
@@ -44,13 +45,6 @@ function getScatterTransform(i: number) {
     ],
   };
 }
-
-// 堆疊模式：hero 後面幾張卡片的位移 / 旋轉 / 縮放（由近到遠）
-const STACK_TRANSFORMS = [
-  { rotate: "18deg", tx: 48, ty: 18, scale: 0.94 },
-  { rotate: "-18deg", tx: -48, ty: 18, scale: 0.94 },
-  { rotate: "32deg", tx: 88, ty: 46, scale: 0.88 },
-];
 
 type GalleryMode = "stack" | "grid";
 
@@ -90,7 +84,7 @@ function ProfileBackgroundGalleryBase({
   }, [months]);
 
   const toggleMode = (next: GalleryMode) => {
-    void Haptics.selectionAsync();
+    haptics.selection();
     setMode(next);
   };
 
@@ -306,7 +300,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   monthYear: {
-    color: "#FF8A22",
+    color: colors.brand,
   },
   grid: {
     flexDirection: "row",
