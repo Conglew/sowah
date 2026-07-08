@@ -40,7 +40,7 @@ export const MOCK_SELF_PROFILE: Profile = {
   username: "samijma_184",
   countryCode: "TW",
   avatarUri: "https://picsum.photos/seed/samijma-avatar/200/200",
-  bio: "Hi, I'm 24 years old and from Taiwan. I'm currently studying in London and have a background in architecture. Nice to meet you!",
+  bio: "No bio yet.",
   stats: {
     hostedCount: 14,
     hostedRank: 2,
@@ -70,7 +70,7 @@ export function buildMockOtherProfile(userId: string): Profile {
     username: "samijma_184",
     countryCode: "TW",
     avatarUri: "https://picsum.photos/seed/samijma-avatar/200/200",
-    bio: "Hi, I'm 24 years old and from Taiwan. I'm currently studying in London and have a background in architecture. Nice to meet you!",
+    bio: "No bio yet.",
     stats: {
       hostedCount: 14,
       hostedRank: 2,

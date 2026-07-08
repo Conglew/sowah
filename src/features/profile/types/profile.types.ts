@@ -47,7 +47,8 @@ export type GalleryMonth = {
 export type Profile = {
   id: string;
   username: string;
-  countryCode: CountryCode;
+  /** 國家碼字串（來自後端 country）；顯示時交給 getCountryFlag 轉旗 */
+  countryCode: string;
   avatarUri: string;
   bio: string;
   stats: ProfileStats;

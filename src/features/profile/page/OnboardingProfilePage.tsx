@@ -2,9 +2,10 @@ import DateTimePicker, {
   type DateTimePickerEvent,
 } from "@react-native-community/datetimepicker";
 import dayjs from "dayjs";
+import { useRouter } from "expo-router";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -41,14 +42,45 @@ function getStatusCode(error: unknown): number | undefined {
   return undefined;
 }
 
-export default function OnboardingProfilePage() {
+type OnboardingProfilePageProps = {
+  /** onboarding：註冊後強制填寫（不能返回）；edit：從 Profile 進來編輯（可返回） */
+  mode?: "onboarding" | "edit";
+};
+
+export default function OnboardingProfilePage({
+  mode = "onboarding",
+}: OnboardingProfilePageProps) {
+  const router = useRouter();
+  const isEdit = mode === "edit";
+
   const completeOnboarding = useAuthStore((state) => state.completeOnboarding);
   const setProfile = useProfileStore((state) => state.setProfile);
+  const existingProfile = useProfileStore((state) => state.profile);
 
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [dob, setDob] = useState<Date | null>(null);
   const [country, setCountry] = useState<CountryCode | null>(null);
+
+  // edit 模式：用現有 profile 預填（Name←user_id、Country←country、DOB←birthday）
+  useEffect(() => {
+    if (!isEdit || !existingProfile) {
+      return;
+    }
+    setName(existingProfile.user_id ?? "");
+
+    const code = existingProfile.country?.toUpperCase();
+    if (code && COUNTRIES.some((c) => c.code === code)) {
+      setCountry(code as CountryCode);
+    }
+
+    if (existingProfile.birthday) {
+      const parsed = dayjs(existingProfile.birthday);
+      if (parsed.isValid()) {
+        setDob(parsed.toDate());
+      }
+    }
+  }, [isEdit, existingProfile]);
 
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showCountryModal, setShowCountryModal] = useState(false);
@@ -56,7 +88,10 @@ export default function OnboardingProfilePage() {
   const [error, setError] = useState<string | null>(null);
 
   const canSubmit =
-    name.trim().length > 0 && country !== null && !submitting;
+    name.trim().length > 0 &&
+    country !== null &&
+    dob !== null &&
+    !submitting;
 
   const selectedCountry = COUNTRIES.find((c) => c.code === country) ?? null;
 
@@ -98,7 +133,7 @@ export default function OnboardingProfilePage() {
   };
 
   const handleSubmit = async () => {
-    if (!canSubmit) {
+    if (!canSubmit || country === null || dob === null) {
       return;
     }
 
@@ -106,15 +141,24 @@ export default function OnboardingProfilePage() {
     setError(null);
 
     try {
-      // 畫面已無獨立 User ID 欄位 → 以 Name 當作後端必填的 user_id 送出。
-      // dob / avatar 目前後端不支援，先留在畫面（UI-only）。
-      const profile = await usersApi.initMe({
+      // Name→user_id、Country→country、DOB→birthday（RFC3339 full-date）。
+      // avatar 後端尚無上傳 endpoint，先不送（UI-only）。
+      const payload = {
         user_id: name.trim(),
-        country: country as CountryCode,
-      });
+        country,
+        birthday: dayjs(dob).format("YYYY-MM-DD"),
+      };
+      const profile = isEdit
+        ? await usersApi.updateMe(payload)
+        : await usersApi.initMe(payload);
 
       setProfile(profile);
-      completeOnboarding();
+
+      if (isEdit) {
+        router.back(); // 編輯完成 → 回 Profile
+      } else {
+        completeOnboarding(); // 註冊 onboarding 完成 → 進 tabs
+      }
     } catch (submitError) {
       const statusCode = getStatusCode(submitError);
 
@@ -137,8 +181,24 @@ export default function OnboardingProfilePage() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.title}>Welcome to SoWah!</Text>
-        <Text style={styles.subtitle}>Set up your profile.</Text>
+        {isEdit ? (
+          <View style={styles.editHeader}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              hitSlop={8}
+              style={styles.backButton}
+            >
+              <Text style={styles.backIcon}>‹</Text>
+            </TouchableOpacity>
+            <Text style={styles.editTitle}>Edit Profile</Text>
+            <View style={styles.backButton} />
+          </View>
+        ) : (
+          <>
+            <Text style={styles.title}>Welcome to SoWah!</Text>
+            <Text style={styles.subtitle}>Set up your profile.</Text>
+          </>
+        )}
 
         {/* 頭像 */}
         <View style={styles.avatarWrap}>
@@ -229,7 +289,9 @@ export default function OnboardingProfilePage() {
           {submitting ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text style={styles.submitButtonText}>START</Text>
+            <Text style={styles.submitButtonText}>
+              {isEdit ? "Save" : "START"}
+            </Text>
           )}
         </TouchableOpacity>
       </ScrollView>
@@ -308,6 +370,32 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 15,
     color: "#555555",
+  },
+
+  // edit 模式的返回列
+  editHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 20,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    alignItems: "flex-start",
+    justifyContent: "center",
+  },
+  backIcon: {
+    fontSize: 30,
+    lineHeight: 32,
+    color: "#333333",
+  },
+  editTitle: {
+    flex: 1,
+    textAlign: "center",
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#111111",
   },
 
   // 頭像

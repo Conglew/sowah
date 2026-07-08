@@ -81,6 +81,10 @@ export default function RootLayout() {
                 name="create-topic"
                 options={{ headerShown: false }}
               />
+              <Stack.Screen
+                name="edit-profile"
+                options={{ headerShown: false }}
+              />
             </Stack.Protected>
           </Stack>
 

@@ -59,6 +59,8 @@ export function ProfileCard({
 }
 
 function Header({ profile }: { profile: Profile }) {
+  const hasBio = profile.bio.trim().length > 0;
+
   return (
     <View style={styles.header}>
       <Image
@@ -72,7 +74,9 @@ function Header({ profile }: { profile: Profile }) {
           <Text style={styles.username}>{profile.username}</Text>
           <Text style={styles.flag}>{getCountryFlag(profile.countryCode)}</Text>
         </View>
-        <Text style={styles.bio}>{profile.bio}</Text>
+        <Text style={[styles.bio, !hasBio && styles.bioEmpty]}>
+          {hasBio ? profile.bio : "No bio yet."}
+        </Text>
       </View>
     </View>
   );
@@ -278,6 +282,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     color: "#666666",
+  },
+  bioEmpty: {
+    fontStyle: "italic",
+    color: "#AAAAAA",
   },
   actions: {
     flexDirection: "row",

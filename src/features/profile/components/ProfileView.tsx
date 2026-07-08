@@ -1,6 +1,6 @@
 import BottomSheet, { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { LinearGradient } from "expo-linear-gradient";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -25,12 +25,13 @@ type Props = {
 };
 
 // snap 位置（螢幕高度百分比）。
-const SNAP_POINTS: string[] = ["46.5%", "75%"];
+const SNAP_POINTS: string[] = ["30%", "75%"];
 // 進 grid 時卡片停在 46.5%（index 0）；grid 拖到 75%（index 1）以上切回 stack。
 const GRID_SNAP_INDEX = 0;
 const STACK_SNAP_INDEX = 1;
 
 export function ProfileView({ variant, userId }: Props) {
+  const router = useRouter();
   const sheetRef = useRef<BottomSheet>(null);
   const { height } = useWindowDimensions();
   const { profile, isLoading, error } = useProfile({ variant, userId });
@@ -127,8 +128,12 @@ export function ProfileView({ variant, userId }: Props) {
           <ProfileCard
             variant={variant}
             profile={profile}
-            // TODO: 接上實際行為
-            onPressPrimary={() => {}}
+            // self：Edit profile → 推入編輯頁（可返回）；other：Add Friends（待接）
+            onPressPrimary={() => {
+              if (variant === "self") {
+                router.push("/edit-profile");
+              }
+            }}
             onPressSecondary={() => {}}
             onPressCheckIn={() => {}}
             onPressMoreContent={() => {}}
