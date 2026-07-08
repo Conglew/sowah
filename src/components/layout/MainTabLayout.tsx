@@ -16,10 +16,10 @@ type MainTabLayoutProps = {
   children: ReactNode;
 };
 
-// 完全不顯示 header 的頁
-const HIDE_HEADER_PATHS = ["/group", "/private"];
+// 完全不顯示 header 的頁（目前無）
+const HIDE_HEADER_PATHS: string[] = [];
 // 只顯示 SoWah logo（不含月份 / DateStrip）的頁
-const LOGO_ONLY_PATHS = ["/profile"];
+const LOGO_ONLY_PATHS = ["/profile", "/group", "/private"];
 
 export default function MainTabLayout({ children }: MainTabLayoutProps) {
   const pathname = usePathname();
