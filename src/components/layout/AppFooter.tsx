@@ -14,7 +14,6 @@ import ProfileIcon from "@/src/assets/icons/profile_icon.svg";
 import ProfileIconActive from "@/src/assets/icons/profile_icon_slc.svg";
 
 import { useHomeFeedControlStore } from "@/src/features/home/stores/home-feed-control.store";
-import { colors } from "@/src/theme/colors";
 
 type FooterItem = {
   label: string;
@@ -99,10 +98,17 @@ export default function AppFooter() {
         {footerItems.slice(0, 2).map(renderItem)}
       </View>
 
-      <TouchableOpacity activeOpacity={0.85} style={styles.playButton}>
-        <Text style={styles.playText}>PLAY</Text>
-        <Text style={styles.playSubText}>1V1 MATCH</Text>
-      </TouchableOpacity>
+      <View style={styles.playWrap} pointerEvents="box-none">
+        {/* 白環（靜態、不發光）→ 橘外圈(#FFC080，微微發光) → 橘內圈(#FF8100) */}
+        <View style={styles.playRing}>
+          <View style={styles.playOuter}>
+            <TouchableOpacity activeOpacity={0.85} style={styles.playButton}>
+              <Text style={styles.playText}>PLAY</Text>
+              <Text style={styles.playSubText}>1V1 MATCH</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
 
       <View style={styles.sideItems}>
         {footerItems.slice(2).map(renderItem)}
@@ -114,12 +120,16 @@ export default function AppFooter() {
 const styles = StyleSheet.create({
   footer: {
     height: 76,
-    paddingHorizontal: 22,
+    paddingHorizontal: 26,
+    paddingTop: 8,
     paddingBottom: 8,
     backgroundColor: "#FFFFFF",
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
+    // footer 上緣分隔線
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#E6E6E6",
   },
   sideItems: {
     flex: 1,
@@ -132,30 +142,55 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  playButton: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    marginHorizontal: 10,
-    backgroundColor: colors.brand,
+  // 外層：讓按鈕與光暈往上凸出 footer
+  playWrap: {
+    width: 108,
+    marginHorizontal: 6,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 6,
-    borderColor: "#FFE4C7",
-    shadowColor: colors.brand,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
+    transform: [{ translateY: -25 }],
+  },
+  // 白色外環：純白、不發光。overflow hidden 把裡面橘色的光暈限制在白圈內
+  playRing: {
+    width: 115,
+    height: 115,
+    borderRadius: 60,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
+  // 橘色外圈 #FFC080，微微發光（光暈來自這層，不是白環）
+  playOuter: {
+    width: 84,
+    height: 84,
+    borderRadius: 43,
+    backgroundColor: "#FFC080",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#FF8100",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
     elevation: 8,
   },
+  // 橘色內圈 #FF8100
+  playButton: {
+    width: 74,
+    height: 74,
+    borderRadius: 37,
+    backgroundColor: "#FF8100",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   playText: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "900",
     color: "#FFFFFF",
-    lineHeight: 24,
+    // lineHeight: 24,
   },
   playSubText: {
-    fontSize: 6,
+    fontSize: 8,
     fontWeight: "700",
     color: "#FFFFFF",
   },
