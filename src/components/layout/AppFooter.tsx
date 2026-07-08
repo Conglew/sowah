@@ -14,6 +14,7 @@ import ProfileIcon from "@/src/assets/icons/profile_icon.svg";
 import ProfileIconActive from "@/src/assets/icons/profile_icon_slc.svg";
 
 import { useHomeFeedControlStore } from "@/src/features/home/stores/home-feed-control.store";
+import { useMatchFrameStore } from "@/src/stores/match-frame.store";
 
 type FooterItem = {
   label: string;
@@ -57,6 +58,8 @@ export default function AppFooter() {
   const requestHomeFeedReset = useHomeFeedControlStore(
     (state) => state.requestHomeFeedReset,
   );
+
+  const toggleMatchFrame = useMatchFrameStore((state) => state.toggle);
 
   const isActive = (path: FooterItem["path"]) => {
     if (path === "/(tabs)") {
@@ -102,7 +105,11 @@ export default function AppFooter() {
         {/* 白環（靜態、不發光）→ 橘外圈(#FFC080，微微發光) → 橘內圈(#FF8100) */}
         <View style={styles.playRing}>
           <View style={styles.playOuter}>
-            <TouchableOpacity activeOpacity={0.85} style={styles.playButton}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              style={styles.playButton}
+              onPress={toggleMatchFrame}
+            >
               <Text style={styles.playText}>PLAY</Text>
               <Text style={styles.playSubText}>1V1 MATCH</Text>
             </TouchableOpacity>

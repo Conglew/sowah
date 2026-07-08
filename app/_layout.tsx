@@ -14,6 +14,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useColorScheme } from "@/hooks/use-color-scheme";
 import AppLoadingScreen from "@/src/components/common/AppLoadingScreen";
 import FadeOverlay from "@/src/components/common/FadeOverlay";
+import ScreenBorderOverlay from "@/src/components/common/ScreenBorderOverlay";
 import { useAppResumeLoading } from "@/src/hooks/useAppResumeLoading";
 import { useAuthStore } from "@/src/stores/auth.store";
 
@@ -100,6 +101,10 @@ export default function RootLayout() {
 
           <StatusBar style="auto" />
         </ThemeProvider>
+
+        {/* 全螢幕橘色邊框：放最後(最上層)、但在 SafeAreaProvider 內以便讀 insets 估圓角；
+            absoluteFill 仍蓋滿整個螢幕、視覺上無視 safe area */}
+        <ScreenBorderOverlay />
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

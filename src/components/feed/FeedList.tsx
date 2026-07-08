@@ -18,6 +18,12 @@ type MockPost = {
   content: string;
 };
 
+// 卡片下邊距（需與 styles.card.marginBottom 一致），用來算吸附間距
+const CARD_GAP = 18;
+
+// 吸附後讓卡片再往上移的量（越大越靠上；0 = 完全置中）
+const SNAP_TOP_OFFSET = 20;
+
 const createMockPosts = (): MockPost[] => {
   return Array.from({ length: 12 }, (_, index) => ({
     id: `post-${index + 1}`,
@@ -40,6 +46,14 @@ export default function FeedList() {
   const [listHeight, setListHeight] = useState(0);
 
   const postMinHeight = listHeight > 0 ? listHeight * 0.86 : 420;
+
+  // 每張卡的「間距」= 卡高 + 卡片下邊距(styles.card.marginBottom)
+  const snapInterval = postMinHeight + CARD_GAP;
+  // 上下留白 = (可視高 - 卡高)/2 讓卡片置中；再把上方減、下方加，使卡片整體上移
+  const centerPadding =
+    listHeight > 0 ? Math.max(0, (listHeight - postMinHeight) / 2) : 12;
+  const topPadding = Math.max(0, centerPadding - SNAP_TOP_OFFSET);
+  const bottomPadding = centerPadding + SNAP_TOP_OFFSET;
 
   const handleLayout = useCallback((event: LayoutChangeEvent) => {
     const nextHeight = event.nativeEvent.layout.height;
@@ -109,7 +123,16 @@ export default function FeedList() {
         data={posts}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={{
+          paddingHorizontal: 20,
+          paddingTop: topPadding,
+          paddingBottom: bottomPadding,
+        }}
+        // 吸附對齊（snap scrolling）：放手後自動吸到最近的卡片並置中
+        snapToInterval={snapInterval}
+        snapToAlignment="start"
+        decelerationRate="fast"
+        disableIntervalMomentum
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
