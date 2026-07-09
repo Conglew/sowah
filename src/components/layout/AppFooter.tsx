@@ -1,6 +1,7 @@
 import { router, usePathname } from "expo-router";
 import type { FC } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import Svg, { Path } from "react-native-svg";
 import type { SvgProps } from "react-native-svg";
 
 import ChatIcon from "@/src/assets/icons/chat_icon.svg";
@@ -24,6 +25,31 @@ type FooterItem = {
 };
 
 const ICON_SIZE = 26;
+
+// 白環尺寸需與 styles.playRing 的 width/height 一致，供下方 SVG 弧線計算座標使用
+const PLAY_RING_SIZE = 115;
+const PLAY_RING_BORDER_WIDTH = 0.6;
+const PLAY_RING_BORDER_COLOR = "#E6E6E6";
+// 白環邊框弧線的張角（度數）。180 = 正好半圓（9點→12點→3點）；
+// 數字越小，線條會以 12 點鐘方向為中心縮短、兩端往上收。調這裡即可。
+const PLAY_RING_ARC_SPAN_DEGREES = 153;
+
+// 弧線兩端點與 SVG path，只在模組載入時算一次，避免每次 render 都重算三角函數
+const PLAY_RING_ARC_PATH = (() => {
+  const radius = PLAY_RING_SIZE / 2 - PLAY_RING_BORDER_WIDTH / 2;
+  const center = PLAY_RING_SIZE / 2;
+  const halfSpanRad = (PLAY_RING_ARC_SPAN_DEGREES / 2) * (Math.PI / 180);
+  // 以正上方（90°）為中心，左右各展開 halfSpanRad
+  const startAngle = Math.PI / 2 + halfSpanRad;
+  const endAngle = Math.PI / 2 - halfSpanRad;
+
+  const startX = center + radius * Math.cos(startAngle);
+  const startY = center - radius * Math.sin(startAngle);
+  const endX = center + radius * Math.cos(endAngle);
+  const endY = center - radius * Math.sin(endAngle);
+
+  return `M ${startX} ${startY} A ${radius} ${radius} 0 0 1 ${endX} ${endY}`;
+})();
 
 const footerItems: FooterItem[] = [
   {
@@ -114,6 +140,27 @@ export default function AppFooter() {
               <Text style={styles.playSubText}>1V1 MATCH</Text>
             </TouchableOpacity>
           </View>
+
+          {/*
+            RN 的 View border 無法只沿著圓形的一部分繪製，
+            因此用 SVG 弧線 (A 命令、sweep-flag=1) 疊在白環上緣，
+            模擬「只有上半部（可調短）有描邊」的效果。
+            pointerEvents="none" 避免遮住按鈕點擊事件。
+          */}
+          <Svg
+            width={PLAY_RING_SIZE}
+            height={PLAY_RING_SIZE}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          >
+            <Path
+              d={PLAY_RING_ARC_PATH}
+              stroke={PLAY_RING_BORDER_COLOR}
+              strokeWidth={PLAY_RING_BORDER_WIDTH}
+              strokeLinecap="round"
+              fill="none"
+            />
+          </Svg>
         </View>
       </View>
 
@@ -159,9 +206,9 @@ const styles = StyleSheet.create({
   },
   // 白色外環：純白、不發光。overflow hidden 把裡面橘色的光暈限制在白圈內
   playRing: {
-    width: 115,
-    height: 115,
-    borderRadius: 60,
+    width: PLAY_RING_SIZE,
+    height: PLAY_RING_SIZE,
+    borderRadius: PLAY_RING_SIZE / 2,
     backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",

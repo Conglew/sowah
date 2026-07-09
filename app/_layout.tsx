@@ -86,6 +86,10 @@ export default function RootLayout() {
                 name="edit-profile"
                 options={{ headerShown: false }}
               />
+              <Stack.Screen
+                name="private-chat/[conversationId]"
+                options={{ headerShown: false }}
+              />
             </Stack.Protected>
           </Stack>
 

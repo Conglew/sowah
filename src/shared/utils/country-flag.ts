@@ -60,6 +60,7 @@ export type CountryCode =
   | "IT"
   | "ES"
   | "NL"
+  | "BE"
   | "SE"
   | "NO"
   | "DK"
@@ -129,6 +130,7 @@ const COUNTRY_FLAG_MAP: Record<CountryCode, string> = {
   IT: "🇮🇹",
   ES: "🇪🇸",
   NL: "🇳🇱",
+  BE: "🇧🇪",
   SE: "🇸🇪",
   NO: "🇳🇴",
   DK: "🇩🇰",
@@ -202,6 +204,7 @@ const COUNTRY_NAMES: Record<CountryCode, string> = {
   IT: "Italy",
   ES: "Spain",
   NL: "Netherlands",
+  BE: "Belgium",
   SE: "Sweden",
   NO: "Norway",
   DK: "Denmark",
