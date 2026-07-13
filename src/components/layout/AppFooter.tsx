@@ -1,3 +1,4 @@
+import { Image } from "expo-image";
 import { router, usePathname } from "expo-router";
 import type { FC } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
@@ -10,21 +11,39 @@ import GroupIcon from "@/src/assets/icons/group_icon.svg";
 import GroupIconActive from "@/src/assets/icons/group_icon_slc.svg";
 import HomeIcon from "@/src/assets/icons/home_icon.svg";
 import HomeIconActive from "@/src/assets/icons/home_icon_slc.svg";
-// TODO: 補上 profile 這組 svg，否則以下兩行 import 會失敗
-import ProfileIcon from "@/src/assets/icons/profile_icon.svg";
-import ProfileIconActive from "@/src/assets/icons/profile_icon_slc.svg";
+import SowahAvatar from "@/src/assets/images/sowah-avar.svg";
 
 import { useHomeFeedControlStore } from "@/src/features/home/stores/home-feed-control.store";
+import { useProfile } from "@/src/features/profile/hooks/useProfile";
 import { useMatchFrameStore } from "@/src/stores/match-frame.store";
+import { colors } from "@/src/theme/colors";
 
-type FooterItem = {
+// 前三個是純圖示分頁；Profile 分頁改顯示使用者頭像（跟 Profile 頁一致），
+// 所以拆成 discriminated union，避免 avatar 分頁被迫帶著用不到的 Icon/ActiveIcon 欄位。
+type IconFooterItem = {
+  kind: "icon";
   label: string;
   Icon: FC<SvgProps>;
   ActiveIcon: FC<SvgProps>;
-  path: "/(tabs)" | "/(tabs)/group" | "/(tabs)/private" | "/(tabs)/profile";
+  path: "/(tabs)" | "/(tabs)/group" | "/(tabs)/private";
 };
 
+type AvatarFooterItem = {
+  kind: "avatar";
+  label: string;
+  path: "/(tabs)/profile";
+};
+
+type FooterItem = IconFooterItem | AvatarFooterItem;
+
 const ICON_SIZE = 26;
+
+// Footer 頭像：外框尺寸固定，用 borderColor 在 transparent／colors.brand 間切換表示選中，
+// 避免像其他 icon 切換 active 時因為換圖而看起來跳動。
+const FOOTER_AVATAR_SIZE = ICON_SIZE;
+const FOOTER_AVATAR_BORDER_WIDTH = 2;
+const FOOTER_AVATAR_INNER_SIZE =
+  FOOTER_AVATAR_SIZE - FOOTER_AVATAR_BORDER_WIDTH * 2;
 
 // 白環尺寸需與 styles.playRing 的 width/height 一致，供下方 SVG 弧線計算座標使用
 const PLAY_RING_SIZE = 115;
@@ -53,27 +72,29 @@ const PLAY_RING_ARC_PATH = (() => {
 
 const footerItems: FooterItem[] = [
   {
+    kind: "icon",
     label: "Home",
     Icon: HomeIcon,
     ActiveIcon: HomeIconActive,
     path: "/(tabs)",
   },
   {
+    kind: "icon",
     label: "Group",
     Icon: GroupIcon,
     ActiveIcon: GroupIconActive,
     path: "/(tabs)/group",
   },
   {
+    kind: "icon",
     label: "Private",
     Icon: ChatIcon,
     ActiveIcon: ChatIconActive,
     path: "/(tabs)/private",
   },
   {
+    kind: "avatar",
     label: "Profile",
-    Icon: ProfileIcon,
-    ActiveIcon: ProfileIconActive,
     path: "/(tabs)/profile",
   },
 ];
@@ -86,6 +107,10 @@ export default function AppFooter() {
   );
 
   const toggleMatchFrame = useMatchFrameStore((state) => state.toggle);
+
+  // 跟 Profile 頁同一個 hook / store，兩處頭像一定一致；沒有頭像時 avatarUri 會是 null
+  const { profile } = useProfile({ variant: "self" });
+  const avatarUri = profile?.avatarUri ?? null;
 
   const isActive = (path: FooterItem["path"]) => {
     if (path === "/(tabs)") {
@@ -105,6 +130,36 @@ export default function AppFooter() {
 
   const renderItem = (item: FooterItem) => {
     const active = isActive(item.path);
+
+    if (item.kind === "avatar") {
+      return (
+        <TouchableOpacity
+          key={item.path}
+          activeOpacity={0.75}
+          style={styles.footerItem}
+          onPress={() => handleFooterItemPress(item)}
+          accessibilityRole="button"
+          accessibilityLabel={item.label}
+        >
+          <View style={[styles.avatarRing, active && styles.avatarRingActive]}>
+            {avatarUri ? (
+              <Image
+                source={{ uri: avatarUri }}
+                style={styles.avatarImage}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+              />
+            ) : (
+              <SowahAvatar
+                width={FOOTER_AVATAR_INNER_SIZE}
+                height={FOOTER_AVATAR_INNER_SIZE}
+              />
+            )}
+          </View>
+        </TouchableOpacity>
+      );
+    }
+
     const Icon = active ? item.ActiveIcon : item.Icon;
 
     return (
@@ -195,6 +250,25 @@ const styles = StyleSheet.create({
     height: 42,
     alignItems: "center",
     justifyContent: "center",
+  },
+  // Profile 分頁頭像外框：固定尺寸，只切換 borderColor 表示 active，避免版面跳動
+  avatarRing: {
+    width: FOOTER_AVATAR_SIZE,
+    height: FOOTER_AVATAR_SIZE,
+    borderRadius: FOOTER_AVATAR_SIZE / 2,
+    borderWidth: FOOTER_AVATAR_BORDER_WIDTH,
+    borderColor: "transparent",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarRingActive: {
+    borderColor: colors.brand,
+  },
+  avatarImage: {
+    width: FOOTER_AVATAR_INNER_SIZE,
+    height: FOOTER_AVATAR_INNER_SIZE,
+    borderRadius: FOOTER_AVATAR_INNER_SIZE / 2,
+    backgroundColor: "#EEEEEE",
   },
   // 外層：讓按鈕與光暈往上凸出 footer
   playWrap: {

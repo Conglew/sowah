@@ -1,17 +1,13 @@
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import ChatAddIcon from "@/src/assets/icons/chat_add_icon.svg";
-import ChatSearchIcon from "@/src/assets/icons/chat_search_icon.svg";
 
-type Props = {
-  searchQuery: string;
-  onSearchQueryChange: (query: string) => void;
-};
-
-export default function PrivateListHeader({
-  searchQuery,
-  onSearchQueryChange,
-}: Props) {
+/**
+ * 固定在畫面最上面、不隨列表滾動的標題列（Private 標題 + 加好友按鈕）。
+ * 搜尋欄拆到 PrivateSearchBar，交給 FlashList 的 ListHeaderComponent，
+ * 才會跟著列表一起上下拖動。
+ */
+export default function PrivateListHeader() {
   const handleAddFriend = () => {
     // TODO: 目前設計稿只定義了「新增好友」入口，尚未有對應 API / 流程，先用 Alert 佔位。
     Alert.alert("Add Friend", "此功能尚未開放");
@@ -32,20 +28,6 @@ export default function PrivateListHeader({
           <ChatAddIcon width={30} height={19} />
         </TouchableOpacity>
       </View>
-
-      <View style={styles.searchBar}>
-        <ChatSearchIcon width={9} height={9} />
-        <TextInput
-          style={styles.searchInput}
-          value={searchQuery}
-          onChangeText={onSearchQueryChange}
-          placeholder=""
-          placeholderTextColor="#AAAAAA"
-          returnKeyType="search"
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-      </View>
     </View>
   );
 }
@@ -54,13 +36,11 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 40,
     paddingTop: 4,
-    paddingBottom: 12,
   },
   titleRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 12,
   },
   title: {
     fontSize: 26,
@@ -72,22 +52,5 @@ const styles = StyleSheet.create({
     height: 34,
     alignItems: "center",
     justifyContent: "center",
-  },
-  searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: "#B0B0B0",
-    paddingHorizontal: 6,
-    backgroundColor: "#FFFFFF",
-    gap: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 9,
-    color: "#111111",
-    padding: 0,
   },
 });

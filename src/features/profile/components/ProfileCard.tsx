@@ -1,6 +1,7 @@
 import { Image } from "expo-image";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import SowahAvatar from "@/src/assets/images/sowah-avar.svg";
 import { getCountryFlag } from "@/src/shared/utils/country-flag";
 import { haptics } from "@/src/shared/utils/haptics";
 import { colors } from "@/src/theme/colors";
@@ -63,12 +64,18 @@ function Header({ profile }: { profile: Profile }) {
 
   return (
     <View style={styles.header}>
-      <Image
-        source={{ uri: profile.avatarUri }}
-        style={styles.avatar}
-        contentFit="cover"
-        cachePolicy="memory-disk"
-      />
+      {profile.avatarUri ? (
+        <Image
+          source={{ uri: profile.avatarUri }}
+          style={styles.avatar}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+        />
+      ) : (
+        <View style={[styles.avatar, styles.avatarFallback]}>
+          <SowahAvatar width={48} height={46} />
+        </View>
+      )}
       <View style={styles.headerText}>
         <View style={styles.nameRow}>
           <Text style={styles.username}>{profile.username}</Text>
@@ -260,6 +267,10 @@ const styles = StyleSheet.create({
     height: 72,
     borderRadius: 36,
     backgroundColor: "#EEE",
+  },
+  avatarFallback: {
+    alignItems: "center",
+    justifyContent: "center",
   },
   headerText: {
     flex: 1,

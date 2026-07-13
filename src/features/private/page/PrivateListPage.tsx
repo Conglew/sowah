@@ -1,16 +1,24 @@
-import { FlashList } from "@shopify/flash-list";
+import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { useRouter } from "expo-router";
-import { useMemo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Keyboard,
+  StyleSheet,
+  Text,
+  TouchableWithoutFeedback,
+  View,
+} from "react-native";
 
 import PrivateConversationRow from "../components/PrivateConversationRow";
 import PrivateListHeader from "../components/PrivateListHeader";
+import PrivateSearchBar from "../components/PrivateSearchBar";
 import { usePrivateConversations } from "../hooks/usePrivateConversations";
 import type { PrivateConversation } from "../types/private.types";
 
 export default function PrivateListPage() {
   const router = useRouter();
   const { conversations } = usePrivateConversations();
+  const listRef = useRef<FlashListRef<PrivateConversation>>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -23,7 +31,17 @@ export default function PrivateListPage() {
     );
   }, [conversations, searchQuery]);
 
+  // 搜尋字串一變動，結果一律從最上面開始看，不要停在舊的捲動位置。
+  // 注意：這裡刻意不用 useFocusEffect 在「返回 focus」時也捲回頂部——
+  // 從聊天室按返回回到列表時，要保留使用者原本的捲動位置，不要跳回最上面。
+  useEffect(() => {
+    listRef.current?.scrollToTop({ animated: true });
+  }, [searchQuery]);
+
   const handlePressConversation = (conversation: PrivateConversation) => {
+    // 進聊天室前先收起鍵盤，把搜尋欄的游標 blur 掉
+    Keyboard.dismiss();
+
     router.push({
       pathname: "/private-chat/[conversationId]",
       params: { conversationId: conversation.id },
@@ -31,31 +49,43 @@ export default function PrivateListPage() {
   };
 
   return (
-    <View style={styles.container}>
-      <PrivateListHeader
-        searchQuery={searchQuery}
-        onSearchQueryChange={setSearchQuery}
-      />
+    // 點列表空白處（不是點在 row / 搜尋欄本身）就收起鍵盤；搜尋輸入框在拖動列表時也會跟著收起
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <View style={styles.container}>
+        {/* 固定在最上面，不隨列表滾動 */}
+        <PrivateListHeader />
 
-      <FlashList
-        data={filteredConversations}
-        keyExtractor={(item) => item.id}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.listContent}
-        renderItem={({ item }) => (
-          <PrivateConversationRow
-            conversation={item}
-            onPress={() => handlePressConversation(item)}
-          />
-        )}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        ListEmptyComponent={
-          <View style={styles.emptyWrap}>
-            <Text style={styles.emptyText}>找不到符合的對話</Text>
-          </View>
-        }
-      />
-    </View>
+        <FlashList
+          ref={listRef}
+          data={filteredConversations}
+          keyExtractor={(item) => item.id}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.listContent}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+          // 搜尋欄放這裡而不是當 FlashList 的 sibling：讓它跟著列表一起上下拖動，
+          // 不會固定不動；Private 標題 + 加好友則留在上面的 PrivateListHeader。
+          ListHeaderComponent={
+            <PrivateSearchBar
+              searchQuery={searchQuery}
+              onSearchQueryChange={setSearchQuery}
+            />
+          }
+          renderItem={({ item }) => (
+            <PrivateConversationRow
+              conversation={item}
+              onPress={() => handlePressConversation(item)}
+            />
+          )}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+          ListEmptyComponent={
+            <View style={styles.emptyWrap}>
+              <Text style={styles.emptyText}>找不到符合的對話</Text>
+            </View>
+          }
+        />
+      </View>
+    </TouchableWithoutFeedback>
   );
 }
 

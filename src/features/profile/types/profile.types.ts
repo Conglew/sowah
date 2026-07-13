@@ -49,7 +49,8 @@ export type Profile = {
   username: string;
   /** 國家碼字串（來自後端 country）；顯示時交給 getCountryFlag 轉旗 */
   countryCode: string;
-  avatarUri: string;
+  /** null = 尚未設定頭像；畫面層（ProfileCard、AppFooter…）要 fallback 到預設圖 sowah-avar.svg */
+  avatarUri: string | null;
   bio: string;
   stats: ProfileStats;
   gallery: GalleryMonth[];
