@@ -41,9 +41,26 @@ export type PrivateConversation = {
   /** 未讀訊息數；0 或 undefined 都不顯示徽章 */
   unreadCount?: number;
   /**
-   * 對話中的所有訊息，依時間先後排列。
+   * 目前「已載入」的訊息，依時間先後排列（永遠包含到最新一則）。
+   * 聊天室訊息是分批載入的，所以這裡不保證是這個對話的全部歷史紀錄，
+   * 更早的訊息要另外呼叫 getMessagesPage 往前補。
    * 列表要顯示的「最後一則訊息預覽」「是否有未回覆邀請」都由這裡即時算出（見 utils/private.utils.ts），
    * 不額外存一份重複欄位，避免列表與聊天室資料不同步。
    */
   messages: PrivateMessage[];
+};
+
+/** 對話清單分批載入一頁的結果 */
+export type ConversationsPage = {
+  conversations: PrivateConversation[];
+  /** 下一頁要帶的 cursor；null 代表已經到底，沒有更多對話了 */
+  nextCursor: string | null;
+};
+
+/** 單一對話「往前」分批載入更早訊息，一頁的結果 */
+export type MessagesPage = {
+  /** 這一頁載到的訊息，依時間先後排列（比目前已載入的還要更早） */
+  messages: PrivateMessage[];
+  /** 再往前一頁要帶的 cursor；null 代表已經到這個對話最早的一則了 */
+  nextCursor: string | null;
 };

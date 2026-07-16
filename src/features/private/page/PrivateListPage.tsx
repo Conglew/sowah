@@ -1,14 +1,17 @@
 import { FlashList, type FlashListRef } from "@shopify/flash-list";
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Keyboard,
+  RefreshControl,
   StyleSheet,
   Text,
   TouchableWithoutFeedback,
   View,
 } from "react-native";
 
+import { colors } from "@/src/theme/colors";
 import PrivateConversationRow from "../components/PrivateConversationRow";
 import PrivateListHeader from "../components/PrivateListHeader";
 import PrivateSearchBar from "../components/PrivateSearchBar";
@@ -17,19 +20,12 @@ import type { PrivateConversation } from "../types/private.types";
 
 export default function PrivateListPage() {
   const router = useRouter();
-  const { conversations } = usePrivateConversations();
-  const listRef = useRef<FlashListRef<PrivateConversation>>(null);
-
   const [searchQuery, setSearchQuery] = useState("");
 
-  const filteredConversations = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
-    if (!normalizedQuery) return conversations;
+  const { conversations, isLoading, isRefreshing, isLoadingMore, refresh, loadMore } =
+    usePrivateConversations(searchQuery);
 
-    return conversations.filter((conversation) =>
-      conversation.username.toLowerCase().includes(normalizedQuery),
-    );
-  }, [conversations, searchQuery]);
+  const listRef = useRef<FlashListRef<PrivateConversation>>(null);
 
   // 搜尋字串一變動，結果一律從最上面開始看，不要停在舊的捲動位置。
   // 注意：這裡刻意不用 useFocusEffect 在「返回 focus」時也捲回頂部——
@@ -57,12 +53,20 @@ export default function PrivateListPage() {
 
         <FlashList
           ref={listRef}
-          data={filteredConversations}
+          data={conversations}
           keyExtractor={(item) => item.id}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={refresh}
+              tintColor={colors.brand}
+              colors={[colors.brand]}
+            />
+          }
           // 搜尋欄放這裡而不是當 FlashList 的 sibling：讓它跟著列表一起上下拖動，
           // 不會固定不動；Private 標題 + 加好友則留在上面的 PrivateListHeader。
           ListHeaderComponent={
@@ -78,9 +82,25 @@ export default function PrivateListPage() {
             />
           )}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
+          // 分批載入：捲到接近底部（剩 40% 一個畫面高度時）就補下一頁
+          onEndReachedThreshold={0.4}
+          onEndReached={() => {
+            void loadMore();
+          }}
+          ListFooterComponent={
+            isLoadingMore ? (
+              <View style={styles.footerLoading}>
+                <ActivityIndicator color={colors.brand} />
+              </View>
+            ) : null
+          }
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
-              <Text style={styles.emptyText}>找不到符合的對話</Text>
+              {isLoading ? (
+                <ActivityIndicator color={colors.brand} />
+              ) : (
+                <Text style={styles.emptyText}>找不到符合的對話</Text>
+              )}
             </View>
           }
         />
@@ -103,6 +123,10 @@ const styles = StyleSheet.create({
     // 不用寫死 1 這種 dp 數字（那樣在不同 DPR 裝置上粗細會不一致）。
     height: StyleSheet.hairlineWidth * 2,
     backgroundColor: "#EEEEEE",
+  },
+  footerLoading: {
+    paddingVertical: 20,
+    alignItems: "center",
   },
   emptyWrap: {
     paddingTop: 60,

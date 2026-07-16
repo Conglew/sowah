@@ -44,6 +44,10 @@ export function useProfile({
             countryCode: backendProfile.country,
             // bio 可能為 null；統一成空字串，交給畫面層轉「No bio yet.」
             bio: backendProfile.bio ?? "",
+            // 頭像改用後端真實資料：使用者還沒上傳過頭像時 avatar 是 null，
+            // avatarUri 保持 null，畫面層（ProfileCard、AppFooter）會自動 fallback 到 sowah-avar.svg，
+            // 不要再退回 MOCK_SELF_PROFILE.avatarUri（那是展示用的假圖，會蓋掉「真的沒有頭像」這個狀態）。
+            avatarUri: backendProfile.avatar?.download_url ?? null,
           }
         : MOCK_SELF_PROFILE;
 

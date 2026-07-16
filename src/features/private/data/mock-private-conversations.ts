@@ -44,9 +44,89 @@ export const MOCK_PRIVATE_CONVERSATIONS: PrivateConversation[] = [
     avatarUri: "https://picsum.photos/seed/samijma_184/200/200",
     isFriend: true,
     unreadCount: 11,
+    // 這個對話刻意放了 12 則訊息（其他對話大多只有 1 則）：
+    // 聊天室一開始只載入最近 10 則（INITIAL_MESSAGES_WINDOW_SIZE），
+    // 往上滑可以再觸發一次「載入更早訊息」把剩下 2 則補回來，用來示範訊息的分批載入。
     messages: [
       {
         id: "samijma_184-1",
+        kind: "text",
+        senderId: "samijma_184",
+        text: "hey! long time no chat",
+        createdAt: pastIso(32, 10, 0),
+      },
+      {
+        id: "samijma_184-2",
+        kind: "text",
+        senderId: "me",
+        text: "haha yeah, it's been a while",
+        createdAt: pastIso(32, 10, 3),
+      },
+      {
+        id: "samijma_184-3",
+        kind: "text",
+        senderId: "samijma_184",
+        text: "how's the new job going?",
+        createdAt: pastIso(30, 19, 0),
+      },
+      {
+        id: "samijma_184-4",
+        kind: "text",
+        senderId: "me",
+        text: "pretty good, still settling in",
+        createdAt: pastIso(30, 19, 5),
+      },
+      {
+        id: "samijma_184-5",
+        kind: "text",
+        senderId: "samijma_184",
+        text: "nice, let's catch up soon",
+        createdAt: pastIso(28, 8, 30),
+      },
+      {
+        id: "samijma_184-6",
+        kind: "text",
+        senderId: "me",
+        text: "for sure!",
+        createdAt: pastIso(28, 8, 32),
+      },
+      {
+        id: "samijma_184-7",
+        kind: "text",
+        senderId: "samijma_184",
+        text: "hey, you around this weekend?",
+        createdAt: pastIso(25, 18, 10),
+      },
+      {
+        id: "samijma_184-8",
+        kind: "text",
+        senderId: "me",
+        text: "yeah! what's up",
+        createdAt: pastIso(25, 18, 12),
+      },
+      {
+        id: "samijma_184-9",
+        kind: "text",
+        senderId: "samijma_184",
+        text: "thinking of checking out that new cafe",
+        createdAt: pastIso(23, 9, 0),
+      },
+      {
+        id: "samijma_184-10",
+        kind: "text",
+        senderId: "me",
+        text: "sounds good, count me in",
+        createdAt: pastIso(23, 9, 5),
+      },
+      {
+        id: "samijma_184-11",
+        kind: "text",
+        senderId: "samijma_184",
+        text: "did you see the photos I sent?",
+        createdAt: pastIso(22, 14, 0),
+      },
+      {
+        id: "samijma_184-12",
         kind: "text",
         senderId: "samijma_184",
         text: "u good",
@@ -188,6 +268,98 @@ export const MOCK_PRIVATE_CONVERSATIONS: PrivateConversation[] = [
         senderId: "nami",
         text: "there is a car behind u!there is a car behind u!there is a car behind u!there is a car behind u!",
         createdAt: pastIso(24, 16, 30),
+      },
+    ],
+  },
+  // 以下 6 筆純粹是為了讓對話清單超過一頁（LIST_PAGE_SIZE = 10），
+  // 才看得出「一開始至少載入 10 筆、往下滑再載入下一頁」的效果。
+  {
+    id: "usopp_sniper",
+    username: "usopp_sniper",
+    countryCode: "JP",
+    avatarUri: "https://picsum.photos/seed/usopp_sniper/200/200",
+    messages: [
+      {
+        id: "usopp_sniper-1",
+        kind: "text",
+        senderId: "usopp_sniper",
+        text: "did you bring the snacks?",
+        createdAt: pastIso(26, 12, 0),
+      },
+    ],
+  },
+  {
+    id: "franky_cyborg",
+    username: "franky_cyborg",
+    countryCode: "US",
+    avatarUri: "https://picsum.photos/seed/franky_cyborg/200/200",
+    messages: [
+      {
+        id: "franky_cyborg-1",
+        kind: "text",
+        senderId: "franky_cyborg",
+        text: "SUPER! see you there",
+        createdAt: pastIso(21, 17, 0),
+      },
+    ],
+  },
+  {
+    id: "brook_soul",
+    username: "brook_soul",
+    countryCode: "GB",
+    avatarUri: "https://picsum.photos/seed/brook_soul/200/200",
+    messages: [
+      {
+        id: "brook_soul-1",
+        kind: "text",
+        senderId: "brook_soul",
+        text: "yohoho, don't forget your coat",
+        createdAt: pastIso(17, 21, 0),
+      },
+    ],
+  },
+  {
+    id: "ace_fire",
+    username: "ace_fire",
+    countryCode: "KR",
+    avatarUri: "https://picsum.photos/seed/ace_fire/200/200",
+    messages: [
+      {
+        id: "ace_fire-1",
+        kind: "text",
+        senderId: "ace_fire",
+        text: "let's grab food later",
+        createdAt: pastIso(14, 13, 0),
+      },
+    ],
+  },
+  {
+    id: "luffy_strawhat",
+    username: "luffy_strawhat",
+    countryCode: "JP",
+    avatarUri: "https://picsum.photos/seed/luffy_strawhat/200/200",
+    messages: [
+      {
+        id: "luffy_strawhat-1",
+        kind: "text",
+        senderId: "luffy_strawhat",
+        text: "meat!! lol",
+        createdAt: pastIso(12, 12, 30),
+      },
+    ],
+  },
+  {
+    id: "shanks_red",
+    username: "shanks_red",
+    countryCode: "FR",
+    avatarUri: "https://picsum.photos/seed/shanks_red/200/200",
+    messages: [
+      {
+        id: "shanks_red-1",
+        kind: "text",
+        senderId: "shanks_red",
+        text: "safe travels",
+        createdAt: pastIso(9, 10, 0),
       },
     ],
   },

@@ -60,14 +60,17 @@ export default function OnboardingProfilePage({
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [dob, setDob] = useState<Date | null>(null);
+  const [bio, setBio] = useState("");
   const [country, setCountry] = useState<CountryCode | null>(null);
 
-  // edit 模式：用現有 profile 預填（Name←user_id、Country←country、DOB←birthday）
+  // edit 模式：用現有 profile 預填（Name←user_id、Country←country、Bio←bio）
+  // 註：DOB 仍會預填，供 onboarding 之後回填或未來需要；edit 模式此頁不編輯 birthday。
   useEffect(() => {
     if (!isEdit || !existingProfile) {
       return;
     }
     setName(existingProfile.user_id ?? "");
+    setBio(existingProfile.bio ?? "");
 
     const code = existingProfile.country?.toUpperCase();
     if (code && COUNTRIES.some((c) => c.code === code)) {
@@ -90,7 +93,8 @@ export default function OnboardingProfilePage({
   const canSubmit =
     name.trim().length > 0 &&
     country !== null &&
-    dob !== null &&
+    // onboarding 需要 birthday；edit 模式改編輯 bio（可空），不要求 dob
+    (isEdit || dob !== null) &&
     !submitting;
 
   const selectedCountry = COUNTRIES.find((c) => c.code === country) ?? null;
@@ -133,7 +137,7 @@ export default function OnboardingProfilePage({
   };
 
   const handleSubmit = async () => {
-    if (!canSubmit || country === null || dob === null) {
+    if (!canSubmit || country === null) {
       return;
     }
 
@@ -141,16 +145,27 @@ export default function OnboardingProfilePage({
     setError(null);
 
     try {
-      // Name→user_id、Country→country、DOB→birthday（RFC3339 full-date）。
       // avatar 後端尚無上傳 endpoint，先不送（UI-only）。
-      const payload = {
-        user_id: name.trim(),
-        country,
-        birthday: dayjs(dob).format("YYYY-MM-DD"),
-      };
-      const profile = isEdit
-        ? await usersApi.updateMe(payload)
-        : await usersApi.initMe(payload);
+      let profile;
+      if (isEdit) {
+        // edit：PATCH 更新 user_id / country / bio。
+        // birthday 不在此頁編輯，省略以保留原值（PATCH 為部分更新）。
+        profile = await usersApi.updateMe({
+          user_id: name.trim(),
+          country,
+          bio: bio.trim().length > 0 ? bio.trim() : null,
+        });
+      } else {
+        // onboarding：三個皆必填，birthday 必送（RFC3339 full-date）。
+        if (dob === null) {
+          return;
+        }
+        profile = await usersApi.initMe({
+          user_id: name.trim(),
+          country,
+          birthday: dayjs(dob).format("YYYY-MM-DD"),
+        });
+      }
 
       setProfile(profile);
 
@@ -232,32 +247,49 @@ export default function OnboardingProfilePage({
           />
         </View>
 
-        {/* Date of Birth */}
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Date of Birth</Text>
-          <TouchableOpacity
-            activeOpacity={0.75}
-            style={styles.selectInput}
-            onPress={() => setShowDatePicker((prev) => !prev)}
-          >
-            <Text style={[styles.selectText, !dob && styles.placeholder]}>
-              {dob ? dayjs(dob).format("DD / MM / YYYY") : "DD / MM / YYYY"}
-            </Text>
-            <Text style={styles.chevron}>⌄</Text>
-          </TouchableOpacity>
+        {isEdit ? (
+          /* Bio（僅 edit 模式） */
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Bio</Text>
+            <TextInput
+              style={styles.bioInput}
+              value={bio}
+              onChangeText={setBio}
+              placeholder="Tell us a little about yourself"
+              placeholderTextColor="#C8C8C8"
+              multiline
+              textAlignVertical="top"
+              maxLength={300}
+            />
+          </View>
+        ) : (
+          /* Date of Birth（僅 onboarding 模式） */
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Date of Birth</Text>
+            <TouchableOpacity
+              activeOpacity={0.75}
+              style={styles.selectInput}
+              onPress={() => setShowDatePicker((prev) => !prev)}
+            >
+              <Text style={[styles.selectText, !dob && styles.placeholder]}>
+                {dob ? dayjs(dob).format("DD / MM / YYYY") : "DD / MM / YYYY"}
+              </Text>
+              <Text style={styles.chevron}>⌄</Text>
+            </TouchableOpacity>
 
-          {showDatePicker && (
-            <View style={styles.pickerWrapper}>
-              <DateTimePicker
-                value={dob ?? new Date(2000, 0, 1)}
-                mode="date"
-                display={Platform.OS === "ios" ? "spinner" : "default"}
-                maximumDate={new Date()}
-                onChange={handleDobChange}
-              />
-            </View>
-          )}
-        </View>
+            {showDatePicker && (
+              <View style={styles.pickerWrapper}>
+                <DateTimePicker
+                  value={dob ?? new Date(2000, 0, 1)}
+                  mode="date"
+                  display={Platform.OS === "ios" ? "spinner" : "default"}
+                  maximumDate={new Date()}
+                  onChange={handleDobChange}
+                />
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Country / Region */}
         <View style={styles.fieldGroup}>
@@ -445,6 +477,17 @@ const styles = StyleSheet.create({
     borderColor: "#BDBDBD",
     borderRadius: 8,
     paddingHorizontal: 12,
+    fontSize: 14,
+    color: "#111111",
+    backgroundColor: "#FFFFFF",
+  },
+  bioInput: {
+    minHeight: 96,
+    borderWidth: 1,
+    borderColor: "#BDBDBD",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     fontSize: 14,
     color: "#111111",
     backgroundColor: "#FFFFFF",

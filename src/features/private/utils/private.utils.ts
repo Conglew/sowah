@@ -51,3 +51,18 @@ export function formatDateSeparatorLabel(iso: string): string {
 export function formatInvitationTime(iso: string): string {
   return `Time: ${dayjs(iso).format("M/D/YYYY HH:mm")}`;
 }
+
+/**
+ * 依「最後一則訊息時間」新到舊排序。
+ * 列表畫面（排序目前已載入的對話）跟 mock API 的分頁邏輯（排序整份「後端」資料再切頁）都要用同一套排序，
+ * 拆出來共用，避免兩邊排序邏輯之後兜不起來。
+ */
+export function sortConversationsByLastMessageDesc(
+  conversations: PrivateConversation[],
+): PrivateConversation[] {
+  return [...conversations].sort((a, b) => {
+    const aLastMessageAt = getLastMessage(a)?.createdAt ?? "";
+    const bLastMessageAt = getLastMessage(b)?.createdAt ?? "";
+    return bLastMessageAt.localeCompare(aLastMessageAt);
+  });
+}

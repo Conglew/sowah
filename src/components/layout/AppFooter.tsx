@@ -45,6 +45,9 @@ const FOOTER_AVATAR_BORDER_WIDTH = 2;
 const FOOTER_AVATAR_INNER_SIZE =
   FOOTER_AVATAR_SIZE - FOOTER_AVATAR_BORDER_WIDTH * 2;
 
+// 沒有頭像時的 fallback 圖示故意比 avatarRing 內圈（FOOTER_AVATAR_INNER_SIZE）大一點：
+const FOOTER_AVATAR_FALLBACK_ICON_SIZE = FOOTER_AVATAR_INNER_SIZE + 2;
+
 // 白環尺寸需與 styles.playRing 的 width/height 一致，供下方 SVG 弧線計算座標使用
 const PLAY_RING_SIZE = 115;
 const PLAY_RING_BORDER_WIDTH = 0.6;
@@ -151,8 +154,8 @@ export default function AppFooter() {
               />
             ) : (
               <SowahAvatar
-                width={FOOTER_AVATAR_INNER_SIZE}
-                height={FOOTER_AVATAR_INNER_SIZE}
+                width={FOOTER_AVATAR_FALLBACK_ICON_SIZE}
+                height={FOOTER_AVATAR_FALLBACK_ICON_SIZE}
               />
             )}
           </View>

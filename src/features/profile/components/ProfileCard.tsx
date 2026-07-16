@@ -73,7 +73,7 @@ function Header({ profile }: { profile: Profile }) {
         />
       ) : (
         <View style={[styles.avatar, styles.avatarFallback]}>
-          <SowahAvatar width={48} height={46} />
+          <SowahAvatar width={72} height={72} />
         </View>
       )}
       <View style={styles.headerText}>
@@ -271,6 +271,7 @@ const styles = StyleSheet.create({
   avatarFallback: {
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: "#00000"
   },
   headerText: {
     flex: 1,
