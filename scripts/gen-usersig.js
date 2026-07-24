@@ -21,10 +21,13 @@ function loadEnv() {
   const envPath = path.resolve(__dirname, "..", ".env");
   if (!fs.existsSync(envPath)) return;
   for (const line of fs.readFileSync(envPath, "utf8").split("\n")) {
-    const m = line.match(/^\s*([\w.]+)\s*=\s*(.*)\s*$/);
-    if (m && !(m[1] in process.env)) {
-      process.env[m[1]] = m[2].replace(/^['"]|['"]$/g, "");
-    }
+    if (/^\s*#/.test(line)) continue; // 整行註解
+    const m = line.match(/^\s*([\w.]+)\s*=\s*(.*)$/);
+    if (!m) continue;
+    let value = m[2].trim();
+    value = value.replace(/\s+#.*$/, "").trim(); // 去掉行內註解（值後面的 # ...）
+    value = value.replace(/^['"]|['"]$/g, ""); // 去掉包住的引號
+    process.env[m[1]] = value; // 同名以最後一個為準，避免舊的空值卡住
   }
 }
 
