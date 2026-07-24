@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 
+import type { Message } from "@tencentcloud/chat";
+
+import {
+  ChatEvent,
+  getChatSDK,
+  toPeerUserID,
+  toPrivateMessage,
+} from "@/src/services/chat";
 import { privateApi } from "../api/private.api";
+import { USE_CHAT } from "../private.config";
 import { usePrivateStore } from "../stores/private.store";
 import type { InvitationResponse, PrivateConversation } from "../types/private.types";
 
@@ -78,6 +87,27 @@ export function usePrivateConversation(
     return () => {
       cancelled = true;
     };
+  }, [conversationId]);
+
+  // 即時收訊：這是原本 mock 架構沒有的一塊。訂閱 Chat 的 MESSAGE_RECEIVED，
+  // 只挑屬於這個對話的訊息，map 後丟進既有的 appendMessage，列表 / 聊天室會一起更新。
+  useEffect(() => {
+    if (!USE_CHAT || !conversationId) return;
+
+    const chat = getChatSDK();
+
+    const handler = (event: { data: Message[] }) => {
+      const incoming = event.data
+        .filter((message) => toPeerUserID(message.conversationID) === conversationId)
+        .map(toPrivateMessage);
+
+      for (const message of incoming) {
+        usePrivateStore.getState().appendMessage(conversationId, message);
+      }
+    };
+
+    chat.on(ChatEvent.MESSAGE_RECEIVED, handler);
+    return () => chat.off(ChatEvent.MESSAGE_RECEIVED, handler);
   }, [conversationId]);
 
   const loadMoreMessages = useCallback(async () => {

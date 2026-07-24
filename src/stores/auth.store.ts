@@ -30,6 +30,14 @@ function isNotFound(error: unknown): boolean {
   return getStatusCode(error) === 404;
 }
 
+// 開發期印出 Chat 要用的 userID（就是 user_uid），方便本機用 scripts/gen-usersig.js 簽測試 sig。
+// 只在 __DEV__ 生效，正式版不會印出使用者識別碼。
+function logChatUserId(user: AuthUser): void {
+  if (__DEV__) {
+    console.log("[chat] 你的 user_uid（複製這個去 gen-usersig.js）:", user.user_uid);
+  }
+}
+
 function getStatusCode(error: unknown): number | undefined {
   if (typeof error === "object" && error !== null && "response" in error) {
     return (error as { response?: { status?: number } }).response?.status;
@@ -88,6 +96,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
       const user = await authApi.whoami();
       set({ user });
+      logChatUserId(user);
 
       await resolvePostAuth(set);
     } catch {
@@ -107,6 +116,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       await tokenStorage.setRefreshToken(result.tokens.refresh_token);
       setAccessToken(result.tokens.access_token);
       set({ user: result.user });
+      logChatUserId(result.user);
 
       await resolvePostAuth(set);
     } catch (error) {

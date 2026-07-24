@@ -15,6 +15,7 @@
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
     "@gorhom/bottom-sheet": "^5.2.14",
+    "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/datetimepicker": "8.4.4",
     "@react-native-google-signin/google-signin": "^16.1.2",
     "@react-native-picker/picker": "2.11.1",
@@ -22,6 +23,7 @@
     "@react-navigation/elements": "^2.6.3",
     "@react-navigation/native": "^7.1.8",
     "@shopify/flash-list": "2.0.2",
+    "@tencentcloud/chat": "^3.6.6",
     "axios": "^1.17.0",
     "dayjs": "^1.11.21",
     "expo": "~54.0.34",
@@ -29,6 +31,7 @@
     "expo-asset": "~12.0.13",
     "expo-audio": "~1.1.1",
     "expo-auth-session": "~7.0.11",
+    "expo-blur": "~15.0.8",
     "expo-calendar": "~15.0.8",
     "expo-constants": "~18.0.13",
     "expo-crypto": "~15.0.9",
@@ -66,7 +69,17 @@
     "eslint-config-expo": "~10.0.0",
     "prettier": "^3.8.4",
     "react-native-svg-transformer": "^1.5.3",
+    "tls-sig-api-v2": "^1.0.2",
     "typescript": "~5.9.2"
   },
-  "private": true
+  "private": true,
+  "expo": {
+    "autolinking": {
+      "ios": {
+        "exclude": [
+          "expo-apple-authentication"
+        ]
+      }
+    }
+  }
 }

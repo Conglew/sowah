@@ -1,7 +1,9 @@
+import { BlurView } from "expo-blur";
 import { Image } from "expo-image";
-import { memo, useEffect, useMemo } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import {
   FlatList,
+  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -10,8 +12,6 @@ import {
 } from "react-native";
 import Animated, {
   Easing,
-  FadeIn,
-  FadeOut,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { colors } from "@/src/theme/colors";
 import type { GalleryMonth, GalleryPhoto } from "../types/profile.types";
+import { getDaySequenceMap } from "../utils/gallery";
 
 const COLUMNS = 4;
 const H_PADDING = 16;
@@ -97,6 +98,9 @@ function ProfileBackgroundGalleryBase({
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
 
+  // 目前被點開放大的相片（null = 未開啟檢視器）
+  const [viewerPhoto, setViewerPhoto] = useState<GalleryPhoto | null>(null);
+
   const tileSize = useMemo(
     () => (width - H_PADDING * 2 - GAP * (COLUMNS - 1)) / COLUMNS,
     [width],
@@ -109,73 +113,167 @@ function ProfileBackgroundGalleryBase({
       .sort((a, b) => b.takenAt.localeCompare(a.takenAt));
   }, [months]);
 
+  // stack↔grid 交叉淡入：0=stack、1=grid。
+  // 兩層都常駐，用 opacity + pointerEvents 切換，避免 Reanimated exiting 殘留的
+  // 滿版 stack Pressable 蓋在最上層攔截 grid 的點擊。
+  const crossfade = useSharedValue(mode === "grid" ? 1 : 0);
+  useEffect(() => {
+    crossfade.value = withTiming(mode === "grid" ? 1 : 0, { duration: 220 });
+  }, [mode, crossfade]);
+
+  const stackFadeStyle = useAnimatedStyle(() => ({
+    opacity: 1 - crossfade.value,
+  }));
+  const gridFadeStyle = useAnimatedStyle(() => ({ opacity: crossfade.value }));
+
   return (
     <View style={StyleSheet.absoluteFill}>
-      {mode === "stack" ? (
-        <Animated.View
-          key="stack"
-          entering={FadeIn.duration(220)}
-          exiting={FadeOut.duration(160)}
-          style={StyleSheet.absoluteFill}
-        >
-          <StackedDeck
-            photos={flatPhotos}
-            topInset={insets.top}
-            collapsedSheetHeight={collapsedSheetHeight}
-            onPress={onRequestGrid}
-            playToken={playToken}
-          />
-        </Animated.View>
-      ) : (
-        <Animated.View
-          key="grid"
-          entering={FadeIn.duration(220)}
-          exiting={FadeOut.duration(160)}
-          style={[StyleSheet.absoluteFill, styles.gridBackground]}
-        >
-          <FlatList
-            data={months}
-            keyExtractor={(m) => m.key}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{
-              paddingTop: insets.top - STACK_TOP_OFFSET,
-              // 讓最後一列能捲到卡片上方
-              paddingBottom: collapsedSheetHeight + 24,
-            }}
-            renderItem={({ item }) => (
-              <View style={styles.monthBlock}>
-                <Text style={styles.monthTitle}>
-                  {item.monthLabel}{" "}
-                  <Text style={styles.monthYear}>{item.year}</Text>
-                </Text>
+      <Animated.View
+        pointerEvents={mode === "stack" ? "auto" : "none"}
+        style={[StyleSheet.absoluteFill, stackFadeStyle]}
+      >
+        <StackedDeck
+          photos={flatPhotos}
+          topInset={insets.top}
+          collapsedSheetHeight={collapsedSheetHeight}
+          onPress={onRequestGrid}
+          playToken={playToken}
+        />
+      </Animated.View>
 
-                <View style={styles.grid}>
-                  {item.photos.map((photo) => (
-                    <View
-                      key={photo.id}
-                      style={[
-                        styles.tile,
-                        { width: tileSize, height: tileSize },
-                      ]}
-                    >
-                      <Image
-                        source={{ uri: photo.uri }}
-                        style={styles.tileImage}
-                        contentFit="cover"
-                        transition={150}
-                        cachePolicy="memory-disk"
-                        recyclingKey={photo.id}
-                      />
-                      <Text style={styles.tileLabel}>{photo.dayLabel}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            )}
-          />
-        </Animated.View>
-      )}
+      <Animated.View
+        pointerEvents={mode === "grid" ? "auto" : "none"}
+        style={[StyleSheet.absoluteFill, styles.gridBackground, gridFadeStyle]}
+      >
+        <FlatList
+          data={months}
+          keyExtractor={(m) => m.key}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{
+            paddingTop: insets.top - STACK_TOP_OFFSET,
+            // 讓最後一列能捲到卡片上方
+            paddingBottom: collapsedSheetHeight + 24,
+          }}
+          renderItem={({ item }) => (
+            <MonthGridBlock
+              month={item}
+              tileSize={tileSize}
+              onPressPhoto={setViewerPhoto}
+            />
+          )}
+        />
+      </Animated.View>
+
+      {/* 單張放大檢視器：白色毛玻璃背景 + 置中大圖 */}
+      <PhotoViewer photo={viewerPhoto} onClose={() => setViewerPhoto(null)} />
     </View>
+  );
+}
+
+type MonthGridBlockProps = {
+  month: GalleryMonth;
+  tileSize: number;
+  onPressPhoto: (photo: GalleryPhoto) => void;
+};
+
+/**
+ * 單一月份的網格區塊。序號依 takenAt 動態計算（每月各自從 1、最舊那天為 1、同日共用），
+ * 不再顯示日期號。抽成獨立元件才能在此使用 useMemo。
+ */
+function MonthGridBlock({ month, tileSize, onPressPhoto }: MonthGridBlockProps) {
+  const daySeqMap = useMemo(
+    () => getDaySequenceMap(month.photos),
+    [month.photos],
+  );
+
+  return (
+    <View style={styles.monthBlock}>
+      <Text style={styles.monthTitle}>
+        {month.monthLabel} <Text style={styles.monthYear}>{month.year}</Text>
+      </Text>
+
+      <View style={styles.grid}>
+        {month.photos.map((photo) => (
+          <Pressable
+            key={photo.id}
+            style={[styles.tile, { width: tileSize, height: tileSize }]}
+            onPress={() => onPressPhoto(photo)}
+          >
+            <Image
+              source={{ uri: photo.uri }}
+              style={styles.tileImage}
+              contentFit="cover"
+              transition={150}
+              cachePolicy="memory-disk"
+              recyclingKey={photo.id}
+            />
+            <Text style={styles.tileLabel}>{daySeqMap[photo.id]}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+type PhotoViewerProps = {
+  photo: GalleryPhoto | null;
+  onClose: () => void;
+};
+
+/**
+ * 單張檢視器。背景用 expo-blur 的 BlurView 即時模糊「後方真實畫面」（透出 profile），
+ * 再疊一層很淡的白，做出「白色透明毛玻璃」效果；前景為固定尺寸卡片
+ * （343×415、radius 22、白色內框），右上角提供關閉鈕。點卡片外背景或關閉鈕皆可關閉。
+ */
+function PhotoViewer({ photo, onClose }: PhotoViewerProps) {
+  return (
+    <Modal
+      visible={photo !== null}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <Pressable style={styles.viewerOverlay} onPress={onClose}>
+        {photo && (
+          <>
+            {/* 即時模糊後方真實畫面；tint="light" 偏白，Android 需 experimentalBlurMethod 才會模糊底層 */}
+            <BlurView
+              intensity={5}
+              tint="light"
+              experimentalBlurMethod="dimezisBlurView"
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={styles.viewerScrim} />
+
+            {/* 卡片本身：攔截觸控，避免點到圖片就關閉（僅背景/關閉鈕關閉） */}
+            <View
+              style={styles.viewerCard}
+              onStartShouldSetResponder={() => true}
+            >
+              <Image
+                source={{ uri: photo.uri }}
+                style={styles.viewerImage}
+                contentFit="cover"
+                transition={150}
+                cachePolicy="memory-disk"
+                recyclingKey={photo.id}
+              />
+
+              {/* 白色內框：距卡片邊緣 11px、線寬 2px（純視覺，不吃觸控） */}
+              <View style={styles.viewerInnerBorder} pointerEvents="none" />
+
+              <Pressable
+                style={styles.viewerClose}
+                onPress={onClose}
+                hitSlop={12}
+              >
+                <Text style={styles.viewerCloseIcon}>✕</Text>
+              </Pressable>
+            </View>
+          </>
+        )}
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -403,5 +501,56 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(0,0,0,0.6)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+  },
+
+  // ---- 單張放大檢視器 ----
+  viewerOverlay: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  viewerScrim: {
+    ...StyleSheet.absoluteFillObject,
+    // BlurView 已負責模糊，這層只補一點白讓背景更偏「白色透明」；調高更白、調低更透
+    backgroundColor: "rgba(255,255,255,0.2)",
+  },
+  viewerCard: {
+    width: 343,
+    height: 415,
+    borderRadius: 22,
+    overflow: "hidden",
+    backgroundColor: "#EEEEEE",
+  },
+  viewerImage: {
+    width: "100%",
+    height: "100%",
+  },
+  viewerInnerBorder: {
+    position: "absolute",
+    top: 11,
+    left: 11,
+    right: 11,
+    bottom: 11,
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+    // 外圓角 22 − 內縮 11 = 11，維持同心圓角
+    borderRadius: 11,
+  },
+  viewerClose: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  viewerCloseIcon: {
+    color: "#FFFFFF",
+    fontSize: 20,
+    fontWeight: "600",
+    textShadowColor: "rgba(0,0,0,0.4)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
 });

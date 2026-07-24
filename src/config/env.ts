@@ -20,4 +20,10 @@ export const ENV = {
     webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? "",
     iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? "",
   },
+
+  chat: {
+    // Tencent Cloud Chat 的 SDKAppID 是公開識別碼，可放前端。
+    // ⚠️ SECRETKEY 不在這裡：它只給後端 / 本機 scripts 簽 UserSig 用（見 chat-usersig.ts）。
+    sdkAppId: Number(process.env.EXPO_PUBLIC_CHAT_SDK_APP_ID ?? 0),
+  },
 } as const;

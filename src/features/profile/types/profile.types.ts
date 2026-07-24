@@ -31,7 +31,10 @@ export type MoreContentItem = {
 export type GalleryPhoto = {
   id: string;
   uri: string;
-  /** tile 上顯示的數字（此處為當月日期，依你截圖為降冪） */
+  /**
+   * @deprecated 原為 tile 顯示的當月日期；grid 現改由 takenAt 動態計算「每日序號」顯示
+   * （見 utils/gallery.ts 的 getDaySequenceMap），此欄位已不用於顯示，保留以維持相容。
+   */
   dayLabel: number;
   takenAt: string; // ISO
 };

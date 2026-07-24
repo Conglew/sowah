@@ -204,8 +204,11 @@ export default function PrivateChatPage() {
     );
   }
 
+  // 這裡刻意只吃 top 這個 edge：bottom 的安全區間距改交給 ChatInputBar 自己用
+  // useSafeAreaInsets 處理，讓它的深色底色可以一路延伸到螢幕最底（含 Home Indicator 那一截），
+  // 不會被 SafeAreaView 在 bottom 多墊出一段白色空隙。
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <ChatHeader
         username={conversation.username}
         avatarUri={conversation.avatarUri}

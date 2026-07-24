@@ -1,4 +1,11 @@
 import { apiClient } from "@/src/services/api/http-client";
+import {
+  getMessageListPage,
+  sendTextMessage,
+  setConversationRead,
+  toConversationID,
+  toPrivateMessage,
+} from "@/src/services/chat";
 import { MOCK_PRIVATE_CONVERSATIONS } from "../data/mock-private-conversations";
 import type {
   ConversationsPage,
@@ -8,11 +15,9 @@ import type {
   PrivateMessage,
 } from "../types/private.types";
 import { sortConversationsByLastMessageDesc } from "../utils/private.utils";
-
-// 後端 API 還沒準備好，先用這個開關頂著。
-// 之後後端好了，把這裡改成 false，下面每支函式就會走 apiClient 那個分支；
-// 呼叫端（store/hooks/畫面）完全不用改。
-const USE_MOCK = true;
+// USE_MOCK：後端沒好前用假資料頂著（後端好了改 false，各函式改走 apiClient 分支，呼叫端不用改）。
+// USE_CHAT：訊息收發改走 Tencent Cloud Chat，優先權高於 USE_MOCK（詳見 private.config.ts）。
+import { USE_CHAT, USE_MOCK } from "../private.config";
 
 const MOCK_FETCH_DELAY_MS = 500;
 const MOCK_WRITE_DELAY_MS = 200;
@@ -156,6 +161,24 @@ export const privateApi = {
   }): Promise<MessagesPage> {
     const { conversationId, cursor, pageSize } = params;
 
+    if (USE_CHAT) {
+      // Chat 的 getMessageList 用 nextReqMessageID 當游標（就是某則訊息的 ID），
+      // 語意等同這裡的 cursor＝目前已載入最舊那則訊息的 id；null 代表拉最新一批。
+      // 注意：Chat 每批固定回 15 則，不吃 pageSize，這裡刻意忽略 pageSize（保留簽名不變）。
+      void pageSize;
+
+      const page = await getMessageListPage({
+        conversationID: toConversationID(conversationId),
+        nextReqMessageID: cursor ?? undefined,
+      });
+
+      return {
+        // SDK 回傳已是舊→新排序，符合這裡「一頁訊息依時間先後」的約定
+        messages: page.messageList.map(toPrivateMessage),
+        nextCursor: page.isCompleted ? null : page.nextReqMessageID,
+      };
+    }
+
     if (USE_MOCK) {
       await delay(MOCK_FETCH_DELAY_MS);
 
@@ -192,6 +215,11 @@ export const privateApi = {
     text: string,
   ): Promise<PrivateMessage> {
     const trimmedText = text.trim();
+
+    if (USE_CHAT) {
+      const sent = await sendTextMessage({ to: conversationId, text: trimmedText });
+      return toPrivateMessage(sent);
+    }
 
     if (USE_MOCK) {
       await delay(MOCK_WRITE_DELAY_MS);
@@ -281,6 +309,11 @@ export const privateApi = {
 
   /** POST /private/conversations/:id/read */
   async markConversationRead(conversationId: string): Promise<void> {
+    if (USE_CHAT) {
+      await setConversationRead(toConversationID(conversationId));
+      return;
+    }
+
     if (USE_MOCK) {
       await delay(150);
 

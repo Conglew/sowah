@@ -12,7 +12,6 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.shancong.sowah",
       "appleTeamId": "FM3W5STXB3",
-      "usesAppleSignIn": true,
       "infoPlist": {
         "NSAppTransportSecurity": {
           "NSExceptionDomains": {
