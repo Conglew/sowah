@@ -31,7 +31,8 @@ function futureIso(daysAhead: number, hour: number, minute: number): string {
  * 之後接後端時，這兩份資料改由 GET /groups、GET /groups/suggested 取回，
  * 型別與畫面層用法都不需要變動。
  */
-export const MOCK_SUGGESTED_GROUPS: SuggestedGroup[] = [
+/** 設計稿上那幾張卡片，固定放在最前面，讓畫面第一眼跟 Figma 一致 */
+const DESIGNED_SUGGESTED_GROUPS: SuggestedGroup[] = [
   {
     id: "cookkkkk-share",
     name: "cookkkkk.share",
@@ -57,6 +58,54 @@ export const MOCK_SUGGESTED_GROUPS: SuggestedGroup[] = [
     name: "photo walkers",
     coverUri: "https://picsum.photos/seed/photowalk/200/200",
   },
+];
+
+const SUGGESTED_TOPICS = [
+  "cooking",
+  "architecture",
+  "travel",
+  "photography",
+  "running",
+  "coffee",
+  "board games",
+  "hiking",
+  "jazz",
+  "startup",
+  "language",
+  "surfing",
+  "cycling",
+  "book club",
+  "yoga",
+];
+
+/**
+ * 推薦群組的假資料總數。
+ * 刻意給到 60 筆（每頁 10 筆 ＝ 6 頁），這樣「一直往右滑會一直補資料」跟
+ * 「滑到真的沒有了就停住、不再轉圈」兩條路徑都測得到——只做無限的那條，
+ * 之後接後端遇到 nextCursor: null 才發現沒處理就來不及了。
+ * 想模擬「永遠有下一頁」把這個數字調大即可（例如 10000）。
+ */
+const MOCK_SUGGESTED_TOTAL = 60;
+
+/** 依 index 產生一筆推薦群組；名稱與圖片 seed 都由 index 決定，重跑結果一致 */
+function buildSuggestedGroup(index: number): SuggestedGroup {
+  const topic = SUGGESTED_TOPICS[index % SUGGESTED_TOPICS.length];
+  const round = Math.floor(index / SUGGESTED_TOPICS.length) + 1;
+  const id = `suggested-${index}`;
+
+  return {
+    id,
+    name: round === 1 ? `${topic} club` : `${topic} club ${round}`,
+    coverUri: `https://picsum.photos/seed/${id}/200/200`,
+  };
+}
+
+export const MOCK_SUGGESTED_GROUPS: SuggestedGroup[] = [
+  ...DESIGNED_SUGGESTED_GROUPS,
+  ...Array.from(
+    { length: Math.max(0, MOCK_SUGGESTED_TOTAL - DESIGNED_SUGGESTED_GROUPS.length) },
+    (_, index) => buildSuggestedGroup(index),
+  ),
 ];
 
 export const MOCK_GROUPS: GroupSummary[] = [

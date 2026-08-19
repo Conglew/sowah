@@ -13,6 +13,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "@/src/theme/colors";
 import EventDateTimePicker from "@/src/features/events/components/EventDateTimePicker";
 import ParticipantsPicker from "@/src/features/events/components/ParticipantsPicker";
+import PrivacyPicker from "@/src/features/events/components/PrivacyPicker";
+import type { TopicPrivacy } from "@/src/features/events/types/events.types";
 
 export default function CreateTopicPage() {
   const router = useRouter();
@@ -20,6 +22,9 @@ export default function CreateTopicPage() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState<Date | null>(null);
   const [participantCount, setParticipantCount] = useState<number | null>(null);
+  // Private 目前需要 Premium 才能選，實際上只有 Public 可選，
+  // 硬要使用者「先選一次」沒有意義，所以直接預設 public。
+  const [privacy, setPrivacy] = useState<TopicPrivacy>("public");
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
@@ -85,6 +90,12 @@ export default function CreateTopicPage() {
             value={participantCount}
             onChange={setParticipantCount}
           />
+        </View>
+
+        <View style={styles.fieldGroup}>
+          <Text style={styles.label}>Privacy</Text>
+
+          <PrivacyPicker value={privacy} onChange={setPrivacy} />
         </View>
 
         <TouchableOpacity activeOpacity={0.8} style={styles.submitButton}>
@@ -159,37 +170,6 @@ const styles = StyleSheet.create({
   textArea: {
     minHeight: 74,
     lineHeight: 17,
-  },
-  selectInput: {
-    height: 28,
-    borderWidth: 1,
-    borderColor: "#C7C7C7",
-    borderRadius: 4,
-    paddingHorizontal: 9,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: "#FFFFFF",
-  },
-  selectContent: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  selectIcon: {
-    width: 18,
-    fontSize: 13,
-    color: "#B8B8B8",
-  },
-  selectPlaceholder: {
-    flex: 1,
-    fontSize: 12,
-    color: "#B8B8B8",
-  },
-  chevron: {
-    marginLeft: 8,
-    fontSize: 14,
-    color: "#AAAAAA",
   },
   submitButton: {
     height: 35,

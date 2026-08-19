@@ -15,6 +15,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import AppLoadingScreen from "@/src/components/common/AppLoadingScreen";
 import FadeOverlay from "@/src/components/common/FadeOverlay";
 import ScreenBorderOverlay from "@/src/components/common/ScreenBorderOverlay";
+import { usePrivateChatSync } from "@/src/features/private/hooks/usePrivateChatSync";
 import { useAppResumeLoading } from "@/src/hooks/useAppResumeLoading";
 import { useAuthStore } from "@/src/stores/auth.store";
 
@@ -38,6 +39,9 @@ export default function RootLayout() {
   const bootstrap = useAuthStore((state) => state.bootstrap);
 
   const isResuming = useAppResumeLoading({ minVisibleMs: 1500 });
+
+  // 全域 Chat 收訊同步：不管在哪一頁，收到新訊息都更新對話快取與未讀（USE_CHAT 時才生效）。
+  usePrivateChatSync();
 
   const [minTimePassed, setMinTimePassed] = useState(false);
 

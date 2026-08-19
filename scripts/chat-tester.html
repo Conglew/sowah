@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Chat 測試器（當對方用）</title>
+<!-- 跟 App 同一支 SDK：直接用本機 node_modules 複製出來的 3.6.6 UMD（不靠外網 CDN，牆內也能開）。
+     這支檔案由 node_modules/@tencentcloud/chat/index.js 複製而來，會掛上 window.TencentCloudChat。 -->
+<script src="./tencent-chat-3.6.6.js"></script>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: -apple-system, "Segoe UI", system-ui, sans-serif; max-width: 720px; margin: 24px auto; padding: 0 16px; }
+  h1 { font-size: 18px; }
+  fieldset { border: 1px solid #8884; border-radius: 8px; margin-bottom: 12px; }
+  label { display: block; font-size: 12px; opacity: .7; margin: 8px 0 2px; }
+  input { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #8886; border-radius: 6px; font-size: 14px; }
+  button { padding: 8px 16px; border: 0; border-radius: 6px; background: #2563eb; color: #fff; font-size: 14px; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  .row { display: flex; gap: 8px; align-items: flex-end; }
+  .row > div { flex: 1; }
+  #status { font-size: 13px; padding: 6px 10px; border-radius: 6px; background: #8882; margin-bottom: 12px; }
+  #log { border: 1px solid #8884; border-radius: 8px; padding: 10px; height: 320px; overflow: auto; font-size: 13px; background: #8881; }
+  .msg { margin: 4px 0; padding: 6px 10px; border-radius: 8px; max-width: 80%; word-break: break-word; }
+  .in  { background: #8883; }
+  .out { background: #2563eb; color: #fff; margin-left: auto; text-align: right; }
+  .sys { opacity: .6; font-size: 12px; text-align: center; margin: 6px 0; }
+</style>
+</head>
+<body>
+<h1>Chat 測試器 — 用來當「對方」跟你的 App 對聊</h1>
+
+<fieldset>
+  <legend>登入</legend>
+  <label>SDKAppID</label>
+  <input id="sdkAppId" value="20045409" />
+  <label>我的 userID（這台當誰）</label>
+  <input id="userID" value="shanks_red" />
+  <label>我的 userSig（node scripts/gen-usersig.js shanks_red 產出來的那串）</label>
+  <input id="userSig" placeholder="貼上 shanks_red 的 userSig" />
+  <div style="margin-top:10px">
+    <button id="loginBtn">登入</button>
+    <button id="logoutBtn" disabled>登出</button>
+  </div>
+</fieldset>
+
+<div id="status">尚未登入</div>
+
+<fieldset>
+  <legend>送訊息</legend>
+  <label>對方 userID（你的 App 帳號）</label>
+  <input id="peer" value="6738299f-ff38-440c-b4e6-06d8612739dd" />
+  <div class="row" style="margin-top:8px">
+    <div>
+      <label>訊息內容</label>
+      <input id="text" placeholder="打字後按 Enter 或送出" disabled />
+    </div>
+    <button id="sendBtn" disabled>送出</button>
+  </div>
+</fieldset>
+
+<div id="log"></div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const TIM = window.TencentCloudChat;
+  let chat = null;
+
+  // SDK 沒載到就直接擋掉登入，錯誤訊息才不會是難懂的 "reading 'create'"。
+  if (!TIM) {
+    document.addEventListener("DOMContentLoaded", () => {
+      setStatus("SDK 沒載到：確認 tencent-chat-3.6.6.js 跟這個 html 在同一個資料夾", false);
+      $("loginBtn").disabled = true;
+    });
+  }
+
+  function setStatus(text, ok) {
+    const el = $("status");
+    el.textContent = text;
+    el.style.background = ok === true ? "#16a34a33" : ok === false ? "#dc262633" : "#8882";
+  }
+  function log(kind, text) {
+    const el = document.createElement("div");
+    if (kind === "sys") { el.className = "sys"; el.textContent = text; }
+    else { el.className = "msg " + (kind === "out" ? "out" : "in"); el.textContent = text; }
+    $("log").appendChild(el);
+    $("log").scrollTop = $("log").scrollHeight;
+  }
+
+  $("loginBtn").onclick = async () => {
+    const SDKAppID = Number($("sdkAppId").value.trim());
+    const userID = $("userID").value.trim();
+    const userSig = $("userSig").value.trim();
+    if (!SDKAppID || !userID || !userSig) { setStatus("SDKAppID / userID / userSig 都要填", false); return; }
+
+    $("loginBtn").disabled = true;
+    setStatus("登入中…");
+    try {
+      chat = TIM.create({ SDKAppID });
+      chat.setLogLevel(1);
+
+      chat.on(TIM.EVENT.SDK_READY, () => {
+        setStatus("已登入：" + userID + "（可以收發了）", true);
+        $("logoutBtn").disabled = false;
+        $("text").disabled = false;
+        $("sendBtn").disabled = false;
+        log("sys", "SDK_READY，登入成功 ✅");
+      });
+
+      chat.on(TIM.EVENT.MESSAGE_RECEIVED, (event) => {
+        for (const m of event.data) {
+          if (m.type === TIM.TYPES.MSG_TEXT) {
+            log("in", m.from + "：" + m.payload.text);
+          } else {
+            log("sys", "收到非文字訊息（type=" + m.type + "）");
+          }
+        }
+      });
+
+      chat.on(TIM.EVENT.ERROR, (e) => log("sys", "SDK ERROR: " + (e.data && e.data.message)));
+      chat.on(TIM.EVENT.KICKED_OUT, () => setStatus("被踢下線（同帳號他處登入 / sig 問題）", false));
+
+      await chat.login({ userID, userSig });
+    } catch (err) {
+      setStatus("登入失敗：" + (err && err.message || err), false);
+      $("loginBtn").disabled = false;
+    }
+  };
+
+  $("logoutBtn").onclick = async () => {
+    try { await chat.logout(); } catch {}
+    setStatus("已登出");
+    $("loginBtn").disabled = false;
+    $("logoutBtn").disabled = true;
+    $("text").disabled = true;
+    $("sendBtn").disabled = true;
+  };
+
+  async function send() {
+    const to = $("peer").value.trim();
+    const text = $("text").value.trim();
+    if (!to || !text || !chat) return;
+    try {
+      const message = chat.createTextMessage({
+        to,
+        conversationType: TIM.TYPES.CONV_C2C,
+        payload: { text },
+      });
+      await chat.sendMessage(message);
+      log("out", "我 → " + to + "：" + text);
+      $("text").value = "";
+    } catch (err) {
+      log("sys", "送出失敗：" + (err && err.message || err));
+    }
+  }
+  $("sendBtn").onclick = send;
+  $("text").addEventListener("keydown", (e) => { if (e.key === "Enter") send(); });
+
+  if (!TIM) setStatus("SDK 沒載到，請確認網路能連 unpkg.com", false);
+</script>
+</body>
+</html>

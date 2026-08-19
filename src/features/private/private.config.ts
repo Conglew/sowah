@@ -9,4 +9,4 @@
  * 測試流程：先確認 loginChat 成功 → 再把 USE_CHAT 設為 true。
  */
 export const USE_MOCK = true;
-export const USE_CHAT = false;
+export const USE_CHAT = true;

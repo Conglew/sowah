@@ -10,6 +10,15 @@ type PrivateStoreState = {
   /** conversation id -> 目前已知的資料（.messages 可能只是「目前已載入的訊息視窗」，不保證是完整歷史） */
   conversationsById: Record<string, PrivateConversation>;
 
+  /**
+   * 使用者目前正開著的聊天室 conversation id（沒開任何聊天室時為 null）。
+   * 全域收訊 listener（usePrivateChatSync）用這個判斷：收到的訊息若不是當前對話，才累加未讀。
+   */
+  activeConversationId: string | null;
+
+  /** 進 / 離開聊天室時登記目前開著的對話（見 usePrivateConversation） */
+  setActiveConversationId: (conversationId: string | null) => void;
+
   /** 用一批新載入 / 更新的對話覆蓋或新增進快取（列表分頁、refresh、getConversationById 都共用這支） */
   upsertConversations: (conversations: PrivateConversation[]) => void;
 
@@ -18,6 +27,9 @@ type PrivateStoreState = {
 
   /** 送出一則新訊息，接到某個對話目前已載入訊息的最後面 */
   appendMessage: (conversationId: string, message: PrivateMessage) => void;
+
+  /** 未讀數字 +1（全域 listener 收到「非當前對話」的新訊息時用；對話不在快取則忽略） */
+  incrementUnread: (conversationId: string) => void;
 
   /** 更新某則邀請訊息的回覆狀態，並在後面接一則自動回覆訊息 */
   applyInvitationResponse: (
@@ -39,6 +51,18 @@ type PrivateStoreState = {
  * 所以這裡把新舊訊息依 id 合併（id 相同以 incoming 為準，例如邀請回覆狀態），
  * 再依 createdAt 重新排序，其餘欄位（unreadCount、username...）才直接用 incoming 的最新值。
  */
+/** 依 createdAt 由舊到新排序（穩定排序，同一秒的多則維持原本相對順序） */
+function sortMessagesByCreatedAt(messages: PrivateMessage[]): PrivateMessage[] {
+  return [...messages].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+/** 依 id 去重（後出現的以最新為準，例如邀請回覆狀態更新） */
+function dedupeMessagesById(messages: PrivateMessage[]): PrivateMessage[] {
+  const byId = new Map<string, PrivateMessage>();
+  for (const message of messages) byId.set(message.id, message);
+  return Array.from(byId.values());
+}
+
 function mergeConversation(
   existing: PrivateConversation | undefined,
   incoming: PrivateConversation,
@@ -70,6 +94,11 @@ function mergeConversation(
  */
 export const usePrivateStore = create<PrivateStoreState>((set) => ({
   conversationsById: {},
+  activeConversationId: null,
+
+  setActiveConversationId: (conversationId) => {
+    set({ activeConversationId: conversationId });
+  },
 
   upsertConversations: (conversations) => {
     if (conversations.length === 0) return;
@@ -92,12 +121,16 @@ export const usePrivateStore = create<PrivateStoreState>((set) => ({
       const conversation = state.conversationsById[conversationId];
       if (!conversation) return state;
 
+      // 去重 + 依時間排序：olderMessages 理論上比較舊，但仍統一收斂，
+      // 避免跟已載入 / 即時收到的訊息時間交錯時亂序（聊天室日期分隔線會因此重複）。
       return {
         conversationsById: {
           ...state.conversationsById,
           [conversationId]: {
             ...conversation,
-            messages: [...olderMessages, ...conversation.messages],
+            messages: sortMessagesByCreatedAt(
+              dedupeMessagesById([...olderMessages, ...conversation.messages]),
+            ),
           },
         },
       };
@@ -109,12 +142,36 @@ export const usePrivateStore = create<PrivateStoreState>((set) => ({
       const conversation = state.conversationsById[conversationId];
       if (!conversation) return state;
 
+      // 依 id 去重：斷線重連 / 同一則被多處觸發時，避免同一則訊息被塞兩次。
+      if (conversation.messages.some((existing) => existing.id === message.id)) {
+        return state;
+      }
+
+      // 接在最後後仍重新排序：即時收到的訊息時間有可能比某些已載入訊息還早
+      // （斷線補送、對方時鐘差），不排序的話聊天室的日期分隔線會被切成兩段而重複。
       return {
         conversationsById: {
           ...state.conversationsById,
           [conversationId]: {
             ...conversation,
-            messages: [...conversation.messages, message],
+            messages: sortMessagesByCreatedAt([...conversation.messages, message]),
+          },
+        },
+      };
+    });
+  },
+
+  incrementUnread: (conversationId) => {
+    set((state) => {
+      const conversation = state.conversationsById[conversationId];
+      if (!conversation) return state;
+
+      return {
+        conversationsById: {
+          ...state.conversationsById,
+          [conversationId]: {
+            ...conversation,
+            unreadCount: (conversation.unreadCount ?? 0) + 1,
           },
         },
       };

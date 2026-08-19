@@ -107,10 +107,18 @@ export const privateApi = {
           conversation.username.toLowerCase().includes(normalizedQuery),
       );
 
-      const startIndex = cursor
-        ? source.findIndex((conversation) => conversation.id === cursor) + 1
-        : 0;
+      const cursorIndex = cursor
+        ? source.findIndex((conversation) => conversation.id === cursor)
+        : -1;
 
+      // cursor 對應的對話找不到（被搜尋條件濾掉／已刪除）時，findIndex 回 -1，
+      // 若直接 +1 會變成 0 → 整個第一頁被當成下一頁重發，listOrder 一次多 10 筆重複。
+      // 這裡明確視為「已到底」，寧可少給也不要重複。
+      if (cursor && cursorIndex === -1) {
+        return { conversations: [], nextCursor: null };
+      }
+
+      const startIndex = cursorIndex + 1;
       const pageItems = source.slice(startIndex, startIndex + pageSize);
       const isLastPage = startIndex + pageItems.length >= source.length;
 

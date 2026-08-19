@@ -11,7 +11,9 @@ import {
   View,
 } from "react-native";
 
+import ListFooterStatus from "@/src/components/common/ListFooterStatus";
 import { colors } from "@/src/theme/colors";
+import { SCREEN_HORIZONTAL_PADDING } from "@/src/theme/layout";
 import PrivateConversationRow from "../components/PrivateConversationRow";
 import PrivateListHeader from "../components/PrivateListHeader";
 import PrivateSearchBar from "../components/PrivateSearchBar";
@@ -22,8 +24,15 @@ export default function PrivateListPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
 
-  const { conversations, isLoading, isRefreshing, isLoadingMore, refresh, loadMore } =
-    usePrivateConversations(searchQuery);
+  const {
+    conversations,
+    isLoading,
+    isRefreshing,
+    isLoadingMore,
+    hasMore,
+    refresh,
+    loadMore,
+  } = usePrivateConversations(searchQuery);
 
   const listRef = useRef<FlashListRef<PrivateConversation>>(null);
 
@@ -88,11 +97,12 @@ export default function PrivateListPage() {
             void loadMore();
           }}
           ListFooterComponent={
-            isLoadingMore ? (
-              <View style={styles.footerLoading}>
-                <ActivityIndicator color={colors.brand} />
-              </View>
-            ) : null
+            <ListFooterStatus
+              isLoadingMore={isLoadingMore}
+              hasMore={hasMore}
+              itemCount={conversations.length}
+              endMessage="沒有更多對話了"
+            />
           }
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
@@ -115,7 +125,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   listContent: {
-    paddingHorizontal: 23,
+    paddingHorizontal: SCREEN_HORIZONTAL_PADDING,
     paddingBottom: 84,
   },
   separator: {
@@ -123,10 +133,6 @@ const styles = StyleSheet.create({
     // 不用寫死 1 這種 dp 數字（那樣在不同 DPR 裝置上粗細會不一致）。
     height: StyleSheet.hairlineWidth * 2,
     backgroundColor: "#EEEEEE",
-  },
-  footerLoading: {
-    paddingVertical: 20,
-    alignItems: "center",
   },
   emptyWrap: {
     paddingTop: 60,

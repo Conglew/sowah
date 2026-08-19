@@ -1,13 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 
-import type { Message } from "@tencentcloud/chat";
-
-import {
-  ChatEvent,
-  getChatSDK,
-  toPeerUserID,
-  toPrivateMessage,
-} from "@/src/services/chat";
 import { privateApi } from "../api/private.api";
 import { USE_CHAT } from "../private.config";
 import { usePrivateStore } from "../stores/private.store";
@@ -89,25 +81,52 @@ export function usePrivateConversation(
     };
   }, [conversationId]);
 
-  // 即時收訊：這是原本 mock 架構沒有的一塊。訂閱 Chat 的 MESSAGE_RECEIVED，
-  // 只挑屬於這個對話的訊息，map 後丟進既有的 appendMessage，列表 / 聊天室會一起更新。
+  // 即時收訊已經上移到 app 層的全域 listener（usePrivateChatSync），這裡只負責「登記目前開著哪個對話」：
+  // 全域 listener 收到屬於這個對話的訊息時會 append 但不累加未讀（因為使用者正在看）。
+  // 離開時只有在「當前對話還是自己」時才清掉，避免快速切換到另一個聊天室時把後進來的那個誤清。
+  useEffect(() => {
+    if (!conversationId) return;
+
+    const store = usePrivateStore.getState();
+    store.setActiveConversationId(conversationId);
+
+    return () => {
+      if (usePrivateStore.getState().activeConversationId === conversationId) {
+        usePrivateStore.getState().setActiveConversationId(null);
+      }
+    };
+  }, [conversationId]);
+
+  // 進聊天室時，若走真正的 Chat 且這個對話還沒有任何訊息，就先抓最新一頁歷史。
+  // （getConversationById 目前仍是 mock，不會提供 Chat 歷史，所以要在這裡補這一刀；
+  //  已經有訊息＝之前載過或剛即時收到，就不覆蓋。往上滑載入更早仍走 loadMoreMessages。）
   useEffect(() => {
     if (!USE_CHAT || !conversationId) return;
 
-    const chat = getChatSDK();
+    const existing =
+      usePrivateStore.getState().conversationsById[conversationId]?.messages ?? [];
+    if (existing.length > 0) return;
 
-    const handler = (event: { data: Message[] }) => {
-      const incoming = event.data
-        .filter((message) => toPeerUserID(message.conversationID) === conversationId)
-        .map(toPrivateMessage);
+    let cancelled = false;
 
-      for (const message of incoming) {
-        usePrivateStore.getState().appendMessage(conversationId, message);
+    void (async () => {
+      try {
+        const page = await privateApi.getMessagesPage({
+          conversationId,
+          cursor: null, // null = 拉最新一批
+          pageSize: MESSAGES_PAGE_SIZE,
+        });
+        if (cancelled) return;
+        usePrivateStore.getState().prependMessages(conversationId, page.messages);
+        setHasMoreMessages(page.nextCursor !== null);
+      } catch (error) {
+        console.warn("[usePrivateConversation] 初次載入 Chat 歷史失敗", error);
       }
-    };
+    })();
 
-    chat.on(ChatEvent.MESSAGE_RECEIVED, handler);
-    return () => chat.off(ChatEvent.MESSAGE_RECEIVED, handler);
+    return () => {
+      cancelled = true;
+    };
   }, [conversationId]);
 
   const loadMoreMessages = useCallback(async () => {

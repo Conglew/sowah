@@ -48,6 +48,17 @@ export type SuggestedGroup = {
   coverUri: string;
 };
 
+/**
+ * 推薦群組分批載入一頁的結果。
+ * 推薦是「演算法產生、沒有明確總數」的清單，所以走 cursor 分頁而不是一次全拿：
+ * 使用者往右滑到底就補下一批，後端隨時可以決定不再給（nextCursor: null）。
+ */
+export type SuggestedGroupsPage = {
+  groups: SuggestedGroup[];
+  /** 下一頁要帶的 cursor；null 代表沒有更多推薦了 */
+  nextCursor: string | null;
+};
+
 /** 群組清單分批載入一頁的結果 */
 export type GroupsPage = {
   groups: GroupSummary[];

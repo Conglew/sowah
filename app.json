@@ -75,6 +75,12 @@
         {
           "photosPermission": "允許 SoWah 存取相簿以設定你的頭像。"
         }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "允許 SoWah 將你報名的活動加入行事曆。"
+        }
       ]
     ],
     "experiments": {

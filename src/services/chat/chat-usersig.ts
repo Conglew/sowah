@@ -12,8 +12,18 @@ import { apiClient } from "@/src/services/api/http-client";
  */
 export async function getUserSig(userID: string): Promise<string> {
   const testSig = process.env.EXPO_PUBLIC_CHAT_TEST_USERSIG;
+  const testUserID = process.env.EXPO_PUBLIC_CHAT_TEST_USER_ID;
 
   if (__DEV__ && testSig) {
+    // 測試用 sig 是簽給「某一個」userID 的。換帳號登入時若照樣回傳同一組，
+    // SDK 只會噴 70009/70013 這種看不出原因的錯，這裡先擋下來並直接告訴你要重簽哪個 userID。
+    if (testUserID && testUserID !== userID) {
+      throw new Error(
+        `[chat] 測試 UserSig 是簽給 ${testUserID} 的，目前登入者是 ${userID}。` +
+          `請執行：node scripts/gen-usersig.js ${userID}`,
+      );
+    }
+
     return testSig;
   }
 

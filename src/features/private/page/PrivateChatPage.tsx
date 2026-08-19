@@ -268,8 +268,10 @@ function renderMessages(
     const dateKey = dayjs(message.createdAt).format("YYYY-MM-DD");
 
     if (dateKey !== lastDateKey) {
+      // key 綁在「這一組的第一則訊息 id」而非只有日期：即使資料萬一亂序、同一天出現兩段，
+      // 也不會兩條分隔線撞同一個 key（訊息 id 全域唯一）。
       nodes.push(
-        <Text key={`sep-${dateKey}`} style={styles.dateSeparator}>
+        <Text key={`sep-${dateKey}-${message.id}`} style={styles.dateSeparator}>
           {formatDateSeparatorLabel(message.createdAt)}
         </Text>,
       );

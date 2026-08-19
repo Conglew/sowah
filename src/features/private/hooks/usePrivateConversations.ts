@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { privateApi } from "../api/private.api";
 import { usePrivateStore } from "../stores/private.store";
 import type { PrivateConversation } from "../types/private.types";
+import { sortConversationsByLastMessageDesc } from "../utils/private.utils";
 
 // 一開始至少載入 10 筆對話（15 筆 mock 資料會切成 10 + 5 兩頁），符合「至少載入 10 筆」的需求。
 const LIST_PAGE_SIZE = 10;
@@ -75,7 +76,11 @@ export function usePrivateConversations(
 
         appliedSearchQueryRef.current = query;
         upsertConversations(page.conversations);
-        setListOrder(page.conversations.map((conversation) => conversation.id));
+        // listOrder 語意上是「有序集合」：同一個 id 只能出現一次。
+        // 重複的 id 會讓 FlashList 拿到重複 key，多出來的那筆佔版位但不會 mount，畫面破一塊空白。
+        setListOrder(
+          Array.from(new Set(page.conversations.map((conversation) => conversation.id))),
+        );
         setCursor(page.nextCursor);
         setHasMore(page.nextCursor !== null);
       } catch (error) {
@@ -125,10 +130,17 @@ export function usePrivateConversations(
       if (requestToken !== requestTokenRef.current) return; // 這期間搜尋字串換了，這頁不接了
 
       upsertConversations(page.conversations);
-      setListOrder((previousOrder) => [
-        ...previousOrder,
-        ...page.conversations.map((conversation) => conversation.id),
-      ]);
+      // 後端分頁 cursor 是「上一頁最後一筆的 id」，翻頁途中排序若因新訊息變動，
+      // 同一個 id 可能被回傳兩次（見 private.api.ts 的已知限制註解）。這裡濾掉已在清單裡的 id。
+      setListOrder((previousOrder) => {
+        const seenIds = new Set(previousOrder);
+        const appendedIds = page.conversations
+          .map((conversation) => conversation.id)
+          .filter((id) => !seenIds.has(id));
+
+        // 沒有新項目就回傳原陣列，避免製造新 reference 觸發不必要的 re-render
+        return appendedIds.length > 0 ? [...previousOrder, ...appendedIds] : previousOrder;
+      });
       setCursor(page.nextCursor);
       setHasMore(page.nextCursor !== null);
     } catch (error) {
@@ -138,9 +150,13 @@ export function usePrivateConversations(
     }
   }, [cursor, hasMore, isLoading, isLoadingMore, isRefreshing, upsertConversations]);
 
-  const conversations = listOrder
-    .map((id) => conversationsById[id])
-    .filter((conversation): conversation is PrivateConversation => conversation != null);
+  // 依最後一則訊息時間新到舊排：收到新訊息時（全域 listener 已更新 store），
+  // 那個對話會即時浮到最上面（live 重排），跟 mock API 後端的排序邏輯共用同一支 util。
+  const conversations = sortConversationsByLastMessageDesc(
+    listOrder
+      .map((id) => conversationsById[id])
+      .filter((conversation): conversation is PrivateConversation => conversation != null),
+  );
 
   return {
     conversations,

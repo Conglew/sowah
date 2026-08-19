@@ -2,6 +2,7 @@ import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import { useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   GestureResponderEvent,
   ScrollView,
   StyleSheet,
@@ -12,6 +13,7 @@ import {
 
 import { getCountryFlag } from "@/src/shared/utils/country-flag";
 import { colors } from "@/src/theme/colors";
+import { useJoinEvent } from "../hooks/useJoinEvent";
 
 dayjs.extend(customParseFormat);
 
@@ -229,10 +231,16 @@ export default function EventSchedulePanel({
     string | null
   >(null);
 
+  const { joiningEventId, joinedEventIds, joinEvent } = useJoinEvent();
+
   const groupedEvents = useMemo(() => {
-    const eventsOfSelectedDate = mockEvents.filter((event) => {
-      return event.date === selectedDate;
-    });
+    const eventsOfSelectedDate = mockEvents
+      .filter((event) => event.date === selectedDate)
+      // 報名成功後把 isJoinedByMe 疊回去，那一場就會從 "Join New Events" 移到 "Your Events"。
+      // 之後接後端時，這層 overlay 換成 store / refetch 即可，下面的分組邏輯不用動。
+      .map((event) =>
+        joinedEventIds.has(event.id) ? { ...event, isJoinedByMe: true } : event,
+      );
 
     const yourEvents = sortEventsByTime(
       eventsOfSelectedDate.filter((event) => event.isJoinedByMe),
@@ -250,7 +258,7 @@ export default function EventSchedulePanel({
       yourEvents,
       joinEvents,
     };
-  }, [selectedDate]);
+  }, [joinedEventIds, selectedDate]);
 
   const handleToggleEvent = (eventId: string) => {
     setExpandedEventId((currentEventId) => {
@@ -309,8 +317,10 @@ export default function EventSchedulePanel({
           events={groupedEvents.yourEvents}
           expandedEventId={expandedEventId}
           participantListEventId={participantListEventId}
+          joiningEventId={joiningEventId}
           onToggleEvent={handleToggleEvent}
           onToggleParticipants={handleToggleParticipants}
+          onJoinEvent={joinEvent}
         />
 
         <EventSectionBlock
@@ -318,8 +328,10 @@ export default function EventSchedulePanel({
           events={groupedEvents.joinEvents}
           expandedEventId={expandedEventId}
           participantListEventId={participantListEventId}
+          joiningEventId={joiningEventId}
           onToggleEvent={handleToggleEvent}
           onToggleParticipants={handleToggleParticipants}
+          onJoinEvent={joinEvent}
         />
       </ScrollView>
     </View>
@@ -331,11 +343,14 @@ type EventSectionBlockProps = {
   events: MockEvent[];
   expandedEventId: string | null;
   participantListEventId: string | null;
+  /** 正在報名中的活動 id */
+  joiningEventId: string | null;
   onToggleEvent: (eventId: string) => void;
   onToggleParticipants: (
     pressEvent: GestureResponderEvent,
     eventId: string,
   ) => void;
+  onJoinEvent: (event: MockEvent) => void;
 };
 
 function EventSectionBlock({
@@ -343,8 +358,10 @@ function EventSectionBlock({
   events,
   expandedEventId,
   participantListEventId,
+  joiningEventId,
   onToggleEvent,
   onToggleParticipants,
+  onJoinEvent,
 }: EventSectionBlockProps) {
   return (
     <View style={styles.sectionBlock}>
@@ -367,8 +384,11 @@ function EventSectionBlock({
                 event={event}
                 isExpanded={isExpanded}
                 isParticipantListVisible={isParticipantListVisible}
+                isJoining={joiningEventId === event.id}
+                isAnyJoinInFlight={joiningEventId !== null}
                 onToggleEvent={onToggleEvent}
                 onToggleParticipants={onToggleParticipants}
+                onJoinEvent={onJoinEvent}
               />
             );
           })}
@@ -382,23 +402,31 @@ type EventRowProps = {
   event: MockEvent;
   isExpanded: boolean;
   isParticipantListVisible: boolean;
+  /** 這一場正在報名中 */
+  isJoining: boolean;
+  /** 任何一場正在報名中：其他場的 Join 一併鎖住，避免同時送出兩筆 */
+  isAnyJoinInFlight: boolean;
   onToggleEvent: (eventId: string) => void;
   onToggleParticipants: (
     pressEvent: GestureResponderEvent,
     eventId: string,
   ) => void;
+  onJoinEvent: (event: MockEvent) => void;
 };
 
 function EventRow({
   event,
   isExpanded,
   isParticipantListVisible,
+  isJoining,
+  isAnyJoinInFlight,
   onToggleEvent,
   onToggleParticipants,
+  onJoinEvent,
 }: EventRowProps) {
   const participantText = `${event.participants.length}/${event.maxParticipants}`;
   const joinDisabledReason = getJoinDisabledReason(event);
-  const isJoinDisabled = !canJoinEvent(event);
+  const isJoinDisabled = !canJoinEvent(event) || isAnyJoinInFlight;
 
   return (
     <TouchableOpacity
@@ -506,10 +534,17 @@ function EventRow({
                     styles.joinButton,
                     isJoinDisabled && styles.joinButtonDisabled,
                   ]}
+                  onPress={() => onJoinEvent(event)}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: isJoinDisabled, busy: isJoining }}
                 >
-                  <Text style={styles.joinButtonText}>
-                    {isJoinDisabled ? "Unavailable" : "Join"}
-                  </Text>
+                  {isJoining ? (
+                    <ActivityIndicator color="#FFFFFF" size="small" />
+                  ) : (
+                    <Text style={styles.joinButtonText}>
+                      {canJoinEvent(event) ? "Join" : "Unavailable"}
+                    </Text>
+                  )}
                 </TouchableOpacity>
               </>
             )}

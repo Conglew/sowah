@@ -55,10 +55,12 @@ try {
   process.exit(1);
 }
 
-const EXPIRE_SECONDS = 7 * 24 * 60 * 60; // 7 天，測試夠用
+const EXPIRE_SECONDS = 180 * 24 * 60 * 60; // 180 天；7 天太短，開發途中常常突然噴 70001
 const api = new TLSSigAPIv2.Api(sdkAppId, secretKey);
 const userSig = api.genSig(userID, EXPIRE_SECONDS);
 
 console.log(`\nuserID:  ${userID}`);
 console.log(`userSig: ${userSig}\n`);
-console.log("貼到 .env： EXPO_PUBLIC_CHAT_TEST_USERSIG=" + userSig + "\n");
+console.log("貼到 .env（兩行都要）：");
+console.log("EXPO_PUBLIC_CHAT_TEST_USER_ID=" + userID);
+console.log("EXPO_PUBLIC_CHAT_TEST_USERSIG=" + userSig + "\n");

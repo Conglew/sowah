@@ -37,6 +37,19 @@ function futureIso(daysAhead: number, hour: number, minute: number): string {
  * 型別（PrivateConversation）與畫面層用法都不需要變動。
  */
 export const MOCK_PRIVATE_CONVERSATIONS: PrivateConversation[] = [
+  // --- 暫時測試用（真實 Chat 收發），測完刪掉 ---
+  // id 必須等於對方的真實 Chat userID：sendMessage 會用 conversationId 當 to，
+  // 收訊 listener 也用 toPeerUserID(conversationID) === conversationId 過濾。
+  // 註：「登入成 6738… 時要點的那筆」不需要另外新增——下面原本的 mock 已經有
+  // id: "shanks_red" 這筆了，再加一筆同 id 會讓 listOrder 出現重複 key（列表破一個空白版位）。
+  {
+    id: "6738299f-ff38-440c-b4e6-06d8612739dd", // 登入成 shanks_red 時點這筆
+    username: "ShanCong",
+    countryCode: "NL",
+    avatarUri: "https://picsum.photos/seed/shancong/200/200",
+    messages: [],
+  },
+  // --- 以下為原本的 mock 對話 ---
   {
     id: "samijma_184",
     username: "samijma_184",

@@ -3,7 +3,7 @@ import { MOCK_GROUPS, MOCK_SUGGESTED_GROUPS } from "../data/mock-groups";
 import type {
   GroupsPage,
   GroupVisibility,
-  SuggestedGroup,
+  SuggestedGroupsPage,
 } from "../types/group.types";
 import { sortGroupsByLastMessageDesc } from "../utils/group.utils";
 
@@ -60,10 +60,17 @@ export const groupApi = {
           (!normalizedQuery || group.name.toLowerCase().includes(normalizedQuery)),
       );
 
-      const startIndex = cursor
-        ? source.findIndex((group) => group.id === cursor) + 1
-        : 0;
+      const cursorIndex = cursor
+        ? source.findIndex((group) => group.id === cursor)
+        : -1;
 
+      // cursor 對應的群組找不到（被搜尋條件濾掉／已退出）時 findIndex 回 -1，
+      // 直接 +1 會變成 0 → 整個第一頁被當成下一頁重發，清單會出現重複項目。
+      if (cursor && cursorIndex === -1) {
+        return { groups: [], nextCursor: null, counts: countByVisibility() };
+      }
+
+      const startIndex = cursorIndex + 1;
       const pageItems = source.slice(startIndex, startIndex + pageSize);
       const isLastPage = startIndex + pageItems.length >= source.length;
 
@@ -81,14 +88,53 @@ export const groupApi = {
     return data;
   },
 
-  /** GET /groups/suggested —「Suggested for you」水平列表 */
-  async getSuggestedGroups(): Promise<SuggestedGroup[]> {
+  /**
+   * GET /groups/suggested?cursor=&pageSize=
+   *
+   * 「Suggested for you」水平列表，往右滑到底就補下一批。
+   * cursor 沿用這個專案的慣例＝「上一頁最後一筆的 id」，null 代表第一頁。
+   *
+   * 給後端的備註：推薦清單通常是動態產生的，用 id 當 cursor 只有在
+   * 「同一次瀏覽期間排序穩定」的前提下才正確。若推薦每次請求都重算，
+   * 建議改回傳不透光的 cursor token（內含這次推薦的 snapshot id + offset），
+   * 前端這邊完全不用改，只是 cursor 字串的內容不同。
+   */
+  async getSuggestedGroupsPage(params: {
+    cursor: string | null;
+    pageSize: number;
+  }): Promise<SuggestedGroupsPage> {
+    const { cursor, pageSize } = params;
+
     if (USE_MOCK) {
       await delay(MOCK_FETCH_DELAY_MS);
-      return MOCK_SUGGESTED_GROUPS;
+
+      const source = MOCK_SUGGESTED_GROUPS;
+
+      const cursorIndex = cursor
+        ? source.findIndex((group) => group.id === cursor)
+        : -1;
+
+      // 同上：cursor 失效時視為已到底，寧可少給也不要把第一頁重發一次
+      if (cursor && cursorIndex === -1) {
+        return { groups: [], nextCursor: null };
+      }
+
+      const startIndex = cursorIndex + 1;
+      const pageItems = source.slice(startIndex, startIndex + pageSize);
+      const isLastPage = startIndex + pageItems.length >= source.length;
+
+      return {
+        groups: pageItems,
+        nextCursor: isLastPage
+          ? null
+          : (pageItems[pageItems.length - 1]?.id ?? null),
+      };
     }
 
-    const { data } = await apiClient.get<SuggestedGroup[]>("/groups/suggested");
+    const { data } = await apiClient.get<SuggestedGroupsPage>("/groups/suggested", {
+      params: { cursor, pageSize },
+    });
+
     return data;
   },
 };

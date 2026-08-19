@@ -30,6 +30,8 @@ export type GetMessageListResult = {
 
 let chat: ChatSDK | null = null;
 let loggedIn = false;
+/** 進行中的 login；讓同時發生的多次 loginChat 共用同一個請求，不會送出兩次 sdk.login */
+let loginPromise: Promise<void> | null = null;
 
 /** 取得（必要時建立）SDK 單例 */
 export function getChatSDK(): ChatSDK {
@@ -42,6 +44,13 @@ export function getChatSDK(): ChatSDK {
     chat = TencentCloudChat.create({ SDKAppID: ENV.chat.sdkAppId });
     // 0 = debug（開發期看得到連線 / 收發 log），1 = release
     chat.setLogLevel(__DEV__ ? 0 : 1);
+
+    // 被踢下線（同帳號在別裝置登入 / UserSig 失效）後 SDK 已非登入狀態，
+    // loggedIn 要同步歸位，否則 isChatLoggedIn() 永遠停在 true，
+    // 之後的 loginChat 會被 early return 擋掉而永遠連不回來。
+    chat.on(TencentCloudChat.EVENT.KICKED_OUT, () => {
+      loggedIn = false;
+    });
   }
 
   return chat;
@@ -52,36 +61,54 @@ export function getChatSDK(): ChatSDK {
  * 這裡把兩步包成一次 await；加 timeout 保底，避免 READY 沒進來時整個卡死。
  */
 function waitForSDKReady(sdk: ChatSDK, timeoutMs = 8000): Promise<void> {
-  return new Promise((resolve) => {
-    let settled = false;
+  return new Promise((resolve, reject) => {
+    // timeout 要 reject 而不是 resolve：resolve 等於謊報「已就緒」，
+    // 呼叫端會把 loggedIn 標成 true，之後 sendMessage / getMessageList 對著沒 ready 的 SDK 發，
+    // 錯誤會在很遠的地方才浮現，很難回推原因。
+    const timer = setTimeout(() => {
+      sdk.off(ChatEvent.SDK_READY, onReady);
+      reject(new Error("[chat] 等待 SDK_READY 逾時，連線未就緒"));
+    }, timeoutMs);
 
-    const finish = () => {
-      if (settled) return;
-      settled = true;
-      sdk.off(ChatEvent.SDK_READY, finish);
+    const onReady = () => {
+      clearTimeout(timer);
+      sdk.off(ChatEvent.SDK_READY, onReady);
       resolve();
     };
 
-    sdk.on(ChatEvent.SDK_READY, finish);
-    setTimeout(finish, timeoutMs);
+    sdk.on(ChatEvent.SDK_READY, onReady);
   });
 }
 
 /** 登入 Chat。userSig 由 chat-usersig.ts 提供（測試期本機簽、正式期後端簽） */
 export async function loginChat(userID: string, userSig: string): Promise<void> {
   if (loggedIn) return;
+  // auth.store 的 restore / login 兩條路徑都會 fire-and-forget 呼叫這支，
+  // 只靠 loggedIn 這個 boolean 擋不住「兩邊幾乎同時進來、當下還是 false」的競態，
+  // 所以把進行中的 promise 存起來共用。
+  if (loginPromise) return loginPromise;
 
-  const sdk = getChatSDK();
-  const ready = waitForSDKReady(sdk);
-  await sdk.login({ userID, userSig });
-  await ready;
-  loggedIn = true;
+  loginPromise = (async () => {
+    const sdk = getChatSDK();
+    const ready = waitForSDKReady(sdk);
+    await sdk.login({ userID, userSig });
+    await ready;
+    loggedIn = true;
+  })().finally(() => {
+    loginPromise = null;
+  });
+
+  return loginPromise;
 }
 
 export async function logoutChat(): Promise<void> {
   if (!chat || !loggedIn) return;
-  await chat.logout();
-  loggedIn = false;
+  try {
+    await chat.logout();
+  } finally {
+    // 即使 logout 失敗（例如網路斷線）也要把本地狀態歸位，否則下次登入會被 loggedIn 擋住。
+    loggedIn = false;
+  }
 }
 
 export function isChatLoggedIn(): boolean {

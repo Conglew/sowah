@@ -11,7 +11,9 @@ import {
   View,
 } from "react-native";
 
+import ListFooterStatus from "@/src/components/common/ListFooterStatus";
 import { colors } from "@/src/theme/colors";
+import { SCREEN_HORIZONTAL_PADDING } from "@/src/theme/layout";
 import GroupListHeader from "../components/GroupListHeader";
 import GroupRow from "../components/GroupRow";
 import GroupSearchBar from "../components/GroupSearchBar";
@@ -31,12 +33,18 @@ export default function GroupListPage() {
     isLoading,
     isRefreshing,
     isLoadingMore,
+    hasMore,
     refresh,
     loadMore,
   } = useGroups(activeVisibility, searchQuery);
 
-  const { suggestedGroups, isLoading: isSuggestedLoading, reload: reloadSuggested } =
-    useSuggestedGroups();
+  const {
+    suggestedGroups,
+    isLoading: isSuggestedLoading,
+    isLoadingMore: isSuggestedLoadingMore,
+    loadMore: loadMoreSuggested,
+    reload: reloadSuggested,
+  } = useSuggestedGroups();
 
   const listRef = useRef<FlashListRef<GroupSummary>>(null);
 
@@ -93,6 +101,10 @@ export default function GroupListPage() {
               <SuggestedGroupsSection
                 suggestedGroups={suggestedGroups}
                 isLoading={isSuggestedLoading}
+                isLoadingMore={isSuggestedLoadingMore}
+                onEndReached={() => {
+                  void loadMoreSuggested();
+                }}
               />
               <GroupTabs
                 activeVisibility={activeVisibility}
@@ -111,11 +123,12 @@ export default function GroupListPage() {
             void loadMore();
           }}
           ListFooterComponent={
-            isLoadingMore ? (
-              <View style={styles.footerLoading}>
-                <ActivityIndicator color={colors.brand} />
-              </View>
-            ) : null
+            <ListFooterStatus
+              isLoadingMore={isLoadingMore}
+              hasMore={hasMore}
+              itemCount={groups.length}
+              endMessage="沒有更多群組了"
+            />
           }
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
@@ -138,17 +151,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   listContent: {
-    paddingHorizontal: 23,
+    paddingHorizontal: SCREEN_HORIZONTAL_PADDING,
     paddingBottom: 84,
   },
   separator: {
     // 與 PrivateListPage 相同：比 hairlineWidth 粗一階，但仍隨裝置 DPR 縮放
     height: StyleSheet.hairlineWidth * 2,
     backgroundColor: "#EEEEEE",
-  },
-  footerLoading: {
-    paddingVertical: 20,
-    alignItems: "center",
   },
   emptyWrap: {
     paddingTop: 40,
