@@ -15,11 +15,17 @@ import {
 import { getCountryFlag } from "@/src/shared/utils/country-flag";
 import { useAuthStore } from "@/src/stores/auth.store";
 import { colors } from "@/src/theme/colors";
-import { useJoinEvent } from "../hooks/useJoinEvent";
+import {
+  useEventParticipation,
+  type ParticipationAction,
+} from "../hooks/useEventParticipation";
 import { eventsApi } from "../api/events.api";
 import type { EventResource } from "../types/events.types";
 
 dayjs.extend(customParseFormat);
+
+// 取消報名的警示色。不是品牌色，故不放進 theme/colors。
+const CANCEL_COLOR = "#D64545";
 
 const MIN_LOADING_MS = 250;
 
@@ -264,6 +270,42 @@ const getJoinDisabledReason = (event: ScheduleEvent) => {
   return null;
 };
 
+/**
+ * 主辦人不在「取消報名」的語意裡：他要的是刪除活動，不是退出自己開的場。
+ * 拿不到 currentUserUid 時一律當成不是主辦人——寧可多顯示一顆按鈕讓後端擋，
+ * 也好過把真正該能取消的人鎖在門外。
+ */
+const isEventHost = (event: ScheduleEvent, currentUserUid?: string) => {
+  return currentUserUid !== undefined && event.creatorUid === currentUserUid;
+};
+
+/** 該不該出現取消按鈕。能不能按是 canCancelEvent 的事。 */
+const shouldShowCancelButton = (
+  event: ScheduleEvent,
+  currentUserUid?: string,
+) => {
+  return event.isJoinedByMe && !isEventHost(event, currentUserUid);
+};
+
+/**
+ * 已報名且尚未開始才能取消。
+ * 活動一旦開始就不給取消：名額釋出已經沒有意義，後端也應該拒絕，
+ * 這裡先擋在前端讓按鈕反灰，不要讓使用者按了才收到錯誤。
+ */
+const canCancelEvent = (event: ScheduleEvent, currentUserUid?: string) => {
+  return (
+    shouldShowCancelButton(event, currentUserUid) && !isEventExpired(event)
+  );
+};
+
+const getCancelDisabledReason = (event: ScheduleEvent) => {
+  if (isEventExpired(event)) {
+    return "This event has already started and can no longer be cancelled.";
+  }
+
+  return null;
+};
+
 function toScheduleEvent(
   event: EventResource,
   isJoinedByMe: boolean,
@@ -323,13 +365,21 @@ export default function EventSchedulePanel({
 
   const currentUserUid = useAuthStore((state) => state.user?.user_uid);
   const {
-    joiningEventId,
-    joinedEventIds,
-    leftEventIds,
+    pending,
+    participationOverrides,
     joinEvent,
-    leavingEventId,
-    leaveEvent,
-  } = useJoinEvent();
+    cancelEvent,
+    clearSettledOverrides,
+  } = useEventParticipation({
+    // 報名／取消成功後靜默重抓：participationOverrides 只讓 UI 立刻反應，
+    // participant_count 這種只有後端知道的欄位得靠這次重抓才會更新。
+    // 走 refreshRequestedRef 這條路是刻意的——它不清空列表也不蓋上 loading，
+    // 使用者不會因為按了一顆按鈕就看到整頁閃白。
+    onParticipationChange: () => {
+      refreshRequestedRef.current = true;
+      setRefreshToken((token) => token + 1);
+    },
+  });
 
   useEffect(() => {
     if (!visible) return;
@@ -393,7 +443,10 @@ export default function EventSchedulePanel({
         for (const event of joined) {
           byId.set(event.event_uid, toScheduleEvent(event, true));
         }
-        setEvents(Array.from(byId.values()));
+        const freshEvents = Array.from(byId.values());
+        setEvents(freshEvents);
+        // 伺服器已經反映的樂觀更新就可以退場了，別讓它一直蓋在上面
+        clearSettledOverrides(freshEvents);
       })
       .catch((error: unknown) => {
         if (!active) return;
@@ -414,20 +467,19 @@ export default function EventSchedulePanel({
     return () => {
       active = false;
     };
-  }, [refreshToken, selectedDate, visible]);
+  }, [clearSettledOverrides, refreshToken, selectedDate, visible]);
 
   const groupedEvents = useMemo(() => {
     const eventsOfSelectedDate = events
       .filter((event) => event.date === selectedDate)
-      // 報名成功後把 isJoinedByMe 疊回去，那一場就會從 "Join New Events" 移到 "Your Events"。
-      // 之後接後端時，這層 overlay 換成 store / refetch 即可，下面的分組邏輯不用動。
+      // 報名／取消後把 isJoinedByMe 疊回去，那一場就會在 "Your Events" 與
+      // "Join New Events" 之間移動。這層 overlay 是樂觀更新，撐到重抓回來的資料
+      // 與它一致就會被 clearSettledOverrides 清掉，之後一律以伺服器為準。
       .map((event) => {
-        if (leftEventIds.has(event.id)) {
-          return { ...event, isJoinedByMe: false };
-        }
-        return joinedEventIds.has(event.id)
-          ? { ...event, isJoinedByMe: true }
-          : event;
+        const override = participationOverrides[event.id];
+        return override === undefined
+          ? event
+          : { ...event, isJoinedByMe: override };
       });
 
     const yourEvents = sortEventsByTime(
@@ -446,7 +498,7 @@ export default function EventSchedulePanel({
       yourEvents,
       joinEvents,
     };
-  }, [events, joinedEventIds, leftEventIds, selectedDate]);
+  }, [events, participationOverrides, selectedDate]);
 
   const handleToggleEvent = (eventId: string) => {
     setExpandedEventId((currentEventId) => {
@@ -548,13 +600,12 @@ export default function EventSchedulePanel({
               events={groupedEvents.yourEvents}
               expandedEventId={expandedEventId}
               participantListEventId={participantListEventId}
-              joiningEventId={joiningEventId}
-              leavingEventId={leavingEventId}
+              pending={pending}
               currentUserUid={currentUserUid}
               onToggleEvent={handleToggleEvent}
               onToggleParticipants={handleToggleParticipants}
               onJoinEvent={joinEvent}
-              onLeaveEvent={leaveEvent}
+              onCancelEvent={cancelEvent}
             />
 
             <EventSectionBlock
@@ -562,13 +613,12 @@ export default function EventSchedulePanel({
               events={groupedEvents.joinEvents}
               expandedEventId={expandedEventId}
               participantListEventId={participantListEventId}
-              joiningEventId={joiningEventId}
-              leavingEventId={leavingEventId}
+              pending={pending}
               currentUserUid={currentUserUid}
               onToggleEvent={handleToggleEvent}
               onToggleParticipants={handleToggleParticipants}
               onJoinEvent={joinEvent}
-              onLeaveEvent={leaveEvent}
+              onCancelEvent={cancelEvent}
             />
           </>
         )}
@@ -582,9 +632,8 @@ type EventSectionBlockProps = {
   events: ScheduleEvent[];
   expandedEventId: string | null;
   participantListEventId: string | null;
-  /** 正在報名中的活動 id */
-  joiningEventId: string | null;
-  leavingEventId: string | null;
+  /** 目前正在處理中的活動與動作 */
+  pending: { eventId: string; action: ParticipationAction } | null;
   currentUserUid?: string;
   onToggleEvent: (eventId: string) => void;
   onToggleParticipants: (
@@ -592,7 +641,7 @@ type EventSectionBlockProps = {
     eventId: string,
   ) => void;
   onJoinEvent: (event: ScheduleEvent) => void;
-  onLeaveEvent: (event: ScheduleEvent) => void;
+  onCancelEvent: (event: ScheduleEvent) => void;
 };
 
 function EventSectionBlock({
@@ -600,13 +649,12 @@ function EventSectionBlock({
   events,
   expandedEventId,
   participantListEventId,
-  joiningEventId,
-  leavingEventId,
+  pending,
   currentUserUid,
   onToggleEvent,
   onToggleParticipants,
   onJoinEvent,
-  onLeaveEvent,
+  onCancelEvent,
 }: EventSectionBlockProps) {
   return (
     <View style={styles.sectionBlock}>
@@ -629,20 +677,17 @@ function EventSectionBlock({
                 event={event}
                 isExpanded={isExpanded}
                 isParticipantListVisible={isParticipantListVisible}
-                isJoining={joiningEventId === event.id}
-                isAnyJoinInFlight={joiningEventId !== null}
-                isLeaving={leavingEventId === event.id}
-                isAnyLeaveInFlight={leavingEventId !== null}
-                canLeave={
-                  event.isJoinedByMe &&
-                  !isEventExpired(event) &&
-                  event.creatorUid !== currentUserUid
+                pendingAction={
+                  pending?.eventId === event.id ? pending.action : null
                 }
+                isAnyActionInFlight={pending !== null}
+                showCancel={shouldShowCancelButton(event, currentUserUid)}
+                canCancel={canCancelEvent(event, currentUserUid)}
                 showDivider={index < events.length - 1}
                 onToggleEvent={onToggleEvent}
                 onToggleParticipants={onToggleParticipants}
                 onJoinEvent={onJoinEvent}
-                onLeaveEvent={onLeaveEvent}
+                onCancelEvent={onCancelEvent}
               />
             );
           })}
@@ -656,13 +701,14 @@ type EventRowProps = {
   event: ScheduleEvent;
   isExpanded: boolean;
   isParticipantListVisible: boolean;
-  /** 這一場正在報名中 */
-  isJoining: boolean;
-  /** 任何一場正在報名中：其他場的 Join 一併鎖住，避免同時送出兩筆 */
-  isAnyJoinInFlight: boolean;
-  isLeaving: boolean;
-  isAnyLeaveInFlight: boolean;
-  canLeave: boolean;
+  /** 這一場正在進行中的動作；null 代表沒有 */
+  pendingAction: ParticipationAction | null;
+  /** 任何一場正在處理中：其他場的按鈕一併鎖住，避免同時送出兩筆 */
+  isAnyActionInFlight: boolean;
+  /** 是否顯示取消按鈕（主辦人不顯示） */
+  showCancel: boolean;
+  /** 取消按鈕是否可按 */
+  canCancel: boolean;
   showDivider: boolean;
   onToggleEvent: (eventId: string) => void;
   onToggleParticipants: (
@@ -670,29 +716,30 @@ type EventRowProps = {
     eventId: string,
   ) => void;
   onJoinEvent: (event: ScheduleEvent) => void;
-  onLeaveEvent: (event: ScheduleEvent) => void;
+  onCancelEvent: (event: ScheduleEvent) => void;
 };
 
 function EventRow({
   event,
   isExpanded,
   isParticipantListVisible,
-  isJoining,
-  isAnyJoinInFlight,
-  isLeaving,
-  isAnyLeaveInFlight,
-  canLeave,
+  pendingAction,
+  isAnyActionInFlight,
+  showCancel,
+  canCancel,
   showDivider,
   onToggleEvent,
   onToggleParticipants,
   onJoinEvent,
-  onLeaveEvent,
+  onCancelEvent,
 }: EventRowProps) {
   const participantText = `${event.participantCount ?? event.participants.length}/${event.maxParticipants}`;
   const isExpired = isEventExpired(event);
   const displayColor = isExpired ? "#B8B8B8" : event.color;
   const joinDisabledReason = getJoinDisabledReason(event);
-  const isJoinDisabled = !canJoinEvent(event) || isAnyJoinInFlight;
+  const isJoinDisabled = !canJoinEvent(event) || isAnyActionInFlight;
+  const isCancelDisabled = !canCancel || isAnyActionInFlight;
+  const cancelDisabledReason = getCancelDisabledReason(event);
 
   return (
     <TouchableOpacity
@@ -806,10 +853,10 @@ function EventRow({
                   accessibilityRole="button"
                   accessibilityState={{
                     disabled: isJoinDisabled,
-                    busy: isJoining,
+                    busy: pendingAction === "join",
                   }}
                 >
-                  {isJoining ? (
+                  {pendingAction === "join" ? (
                     <ActivityIndicator color="#FFFFFF" size="small" />
                   ) : (
                     <Text style={styles.joinButtonText}>
@@ -820,30 +867,43 @@ function EventRow({
               </>
             )}
 
-            {canLeave && (
-              <TouchableOpacity
-                activeOpacity={0.8}
-                disabled={isAnyLeaveInFlight}
-                style={[
-                  styles.leaveButton,
-                  isAnyLeaveInFlight && styles.joinButtonDisabled,
-                ]}
-                onPress={() => onLeaveEvent(event)}
-                accessibilityRole="button"
-                accessibilityLabel="Cancel participation"
-                accessibilityState={{
-                  disabled: isAnyLeaveInFlight,
-                  busy: isLeaving,
-                }}
-              >
-                {isLeaving ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                ) : (
-                  <Text style={styles.joinButtonText}>
-                    Cancel participation
+            {showCancel && (
+              <>
+                {cancelDisabledReason && (
+                  <Text style={styles.joinDisabledReason}>
+                    {cancelDisabledReason}
                   </Text>
                 )}
-              </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  disabled={isCancelDisabled}
+                  style={[
+                    styles.cancelButton,
+                    isCancelDisabled && styles.cancelButtonDisabled,
+                  ]}
+                  onPress={() => onCancelEvent(event)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cancel participation"
+                  accessibilityState={{
+                    disabled: isCancelDisabled,
+                    busy: pendingAction === "cancel",
+                  }}
+                >
+                  {pendingAction === "cancel" ? (
+                    <ActivityIndicator color={CANCEL_COLOR} size="small" />
+                  ) : (
+                    <Text
+                      style={[
+                        styles.cancelButtonText,
+                        isCancelDisabled && styles.cancelButtonTextDisabled,
+                      ]}
+                    >
+                      Cancel participation
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </>
             )}
           </View>
         )}
@@ -1021,13 +1081,28 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  leaveButton: {
+  // 取消是破壞性操作，用外框 + 紅字而不是實心紅：實心紅在展開區塊裡太搶眼，
+  // 會比它上面的主要資訊（討論指引）還先被看到。
+  cancelButton: {
     height: 40,
     marginTop: 16,
     borderRadius: 10,
-    backgroundColor: "#666666",
+    borderWidth: 1,
+    borderColor: CANCEL_COLOR,
+    backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
+  },
+  cancelButtonDisabled: {
+    borderColor: "#D8D8D8",
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: CANCEL_COLOR,
+  },
+  cancelButtonTextDisabled: {
+    color: "#BFBFBF",
   },
   joinDisabledReason: {
     marginTop: 12,

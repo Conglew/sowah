@@ -72,6 +72,15 @@ export const eventsApi = {
     return { eventId: eventUid, notificationQueued: false };
   },
 
+  /**
+   * POST /events/:eventUid/leave
+   *
+   * 取消報名。同 joinEvent，request body 為空，身分走 Authorization header。
+   * 取消通知信由後端在交易成功後寄出（見 docs/api/events-join.md）。
+   *
+   * 需要冪等：重複呼叫（網路重試、連點）只能寄一封取消信，
+   * 第二次以後回 404 / 409 都算成功，前端不該顯示錯誤。
+   */
   async leaveEvent(eventUid: string): Promise<void> {
     await apiClient.post(`/events/${encodeURIComponent(eventUid)}/leave`);
   },
