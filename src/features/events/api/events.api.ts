@@ -36,4 +36,22 @@ export const eventsApi = {
 
     return data;
   },
+
+  /**
+   * DELETE /events/:eventId/join
+   *
+   * 取消報名。同 joinEvent，request body 為空，身分走 Authorization header。
+   * 取消通知信一樣由後端在交易成功後寄出（見 docs/api/events-join.md）。
+   *
+   * 需要冪等：重複呼叫（網路重試、連點）只能寄一封取消信，
+   * 第二次以後回 404 / 409 都算成功，前端不該顯示錯誤。
+   */
+  async cancelJoin(eventId: string): Promise<void> {
+    if (USE_MOCK) {
+      await delay(MOCK_WRITE_DELAY_MS);
+      return;
+    }
+
+    await apiClient.delete(`/events/${eventId}/join`);
+  },
 };
