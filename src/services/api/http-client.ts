@@ -13,6 +13,12 @@ let accessToken: string | null = null;
 
 export function setAccessToken(token: string | null) {
   accessToken = token;
+
+  // 僅供本機開發時複製到 Scalar 測試 Auth Required API。
+  // Production bundle 的 __DEV__ 為 false，不會輸出；refresh token 永遠不印。
+  if (__DEV__ && token) {
+    console.info("[DEV][Scalar] Authorization: Bearer " + token);
+  }
 }
 
 // 以下兩個 injection point 由 auth.store 注入，避免 http-client 反向 import store（循環依賴）

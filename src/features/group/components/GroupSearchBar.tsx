@@ -8,10 +8,13 @@ type Props = {
 };
 
 /**
- * 搜尋欄。放在 FlashList 的 ListHeaderComponent，跟著列表內容一起上下拖動。
+ * 固定在 Group Header 下方，不屬於 FlashList 的可刷新內容。
  * 樣式與 PrivateSearchBar 相同——feature 之間刻意不互相 import（避免耦合），各自維護一份。
  */
-export default function GroupSearchBar({ searchQuery, onSearchQueryChange }: Props) {
+export default function GroupSearchBar({
+  searchQuery,
+  onSearchQueryChange,
+}: Props) {
   return (
     <View style={styles.container}>
       <View style={styles.searchBar}>

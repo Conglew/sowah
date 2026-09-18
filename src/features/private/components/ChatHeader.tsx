@@ -2,6 +2,7 @@ import { Image } from "expo-image";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { getCountryFlag } from "@/src/shared/utils/country-flag";
+import SowahAvatar from "@/src/assets/images/sowah-avar.svg";
 
 type Props = {
   username: string;
@@ -37,13 +38,17 @@ export default function ChatHeader({
         {/* 國旗改成貼在頭像右下角的小徽章，不是跟在名字後面（跟 PrivateConversationRow 的
             friendBadge 是同一種「絕對定位貼在圖片角落」寫法，維持頭像/徽章的視覺慣例一致） */}
         <View style={styles.avatarWrap}>
-          {!!avatarUri && (
+          {avatarUri ? (
             <Image
               source={{ uri: avatarUri }}
               style={styles.avatar}
               contentFit="cover"
               cachePolicy="memory-disk"
             />
+          ) : (
+            <View style={[styles.avatar, styles.avatarFallback]}>
+              <SowahAvatar width={29} height={29} />
+            </View>
           )}
           <View style={styles.flagBadge}>
             <Text style={styles.flagText}>{getCountryFlag(countryCode)}</Text>
@@ -102,6 +107,10 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 16,
     backgroundColor: "#EEEEEE",
+  },
+  avatarFallback: {
+    alignItems: "center",
+    justifyContent: "center",
   },
   flagBadge: {
     position: "absolute",

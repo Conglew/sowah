@@ -46,7 +46,9 @@ export function useGroups(
   const upsertGroups = useGroupStore((state) => state.upsertGroups);
 
   const [listOrder, setListOrder] = useState<string[]>([]);
-  const [counts, setCounts] = useState<Record<GroupVisibility, number> | null>(null);
+  const [counts, setCounts] = useState<Record<GroupVisibility, number> | null>(
+    null,
+  );
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
@@ -55,7 +57,10 @@ export function useGroups(
 
   // 目前「真的已經送出查詢」的條件（debounce 後），refresh / loadMore 都要照這組條件繼續查，
   // 不能直接用 searchQuery（可能是使用者還在打、debounce 還沒觸發的最新值）。
-  const appliedQueryRef = useRef<{ visibility: GroupVisibility; searchQuery: string }>({
+  const appliedQueryRef = useRef<{
+    visibility: GroupVisibility;
+    searchQuery: string;
+  }>({
     visibility,
     searchQuery: "",
   });

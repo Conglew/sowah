@@ -1,39 +1,93 @@
 import { apiClient } from "@/src/services/api/http-client";
-import type { JoinEventResult } from "../types/events.types";
+import type {
+  CreateEventRequest,
+  EventParticipantPage,
+  EventResource,
+  JoinEventResult,
+  UpdateEventRequest,
+} from "../types/events.types";
 
-// 後端 API 還沒好，先用這個開關頂著（與 private.api.ts / group.api.ts 同一套模式）。
-// 後端好了改成 false，下面的函式就會走 apiClient 分支，呼叫端完全不用改。
-const USE_MOCK = true;
+export type EventWindowParams = {
+  start: string;
+  end: string;
+  sort?: "newest" | "oldest";
+};
 
-const MOCK_WRITE_DELAY_MS = 400;
+export type PublicEventParams = EventWindowParams & {
+  limit?: number;
+  offset?: number;
+};
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+type EventsResponse = { events: EventResource[] };
+type EventsPage = EventsResponse & {
+  limit: number;
+  offset: number;
+  total: number;
+};
 
 export const eventsApi = {
-  /**
-   * POST /events/:eventId/join
-   *
-   * 報名活動。Email 通知由**後端**在報名交易成功後寄出，前端不參與寄信：
-   * - SMTP / 郵件服務的金鑰不能進 App bundle。
-   * - 收件地址必須由後端依登入者從自己的 DB 查出來；讓前端傳 email 等於
-   *   開放任何人幫別人報名並寄信。
-   * - 重試、退信處理、去重（連點兩下不能寄兩封）都需要伺服器端狀態。
-   *
-   * 因此這支只送 eventId，不送任何使用者資料（身分走 apiClient 的 Authorization header）。
-   * 詳細規格見 docs/api/events-join.md。
-   */
-  async joinEvent(eventId: string): Promise<JoinEventResult> {
-    if (USE_MOCK) {
-      await delay(MOCK_WRITE_DELAY_MS);
-      return { eventId, notificationQueued: true };
-    }
+  async create(body: CreateEventRequest): Promise<EventResource> {
+    const { data } = await apiClient.post<EventResource>("/events", body);
+    return data;
+  },
 
-    const { data } = await apiClient.post<JoinEventResult>(
-      `/events/${eventId}/join`,
+  async listJoined(params: EventWindowParams): Promise<EventResource[]> {
+    const { data } = await apiClient.get<EventsResponse>("/events/joined", {
+      params,
+    });
+    return data.events;
+  },
+
+  async listPublic(params: PublicEventParams): Promise<EventsPage> {
+    const { data } = await apiClient.get<EventsPage>("/events/public", {
+      params,
+    });
+    return data;
+  },
+
+  async getById(eventUid: string): Promise<EventResource> {
+    const { data } = await apiClient.get<EventResource>(
+      `/events/${encodeURIComponent(eventUid)}`,
     );
+    return data;
+  },
 
+  async update(
+    eventUid: string,
+    body: UpdateEventRequest,
+  ): Promise<EventResource> {
+    const { data } = await apiClient.patch<EventResource>(
+      `/events/${encodeURIComponent(eventUid)}`,
+      body,
+    );
+    return data;
+  },
+
+  async delete(eventUid: string): Promise<void> {
+    await apiClient.delete(`/events/${encodeURIComponent(eventUid)}`);
+  },
+
+  async joinEvent(eventUid: string): Promise<JoinEventResult> {
+    await apiClient.post(`/events/${encodeURIComponent(eventUid)}/join`);
+    return { eventId: eventUid, notificationQueued: false };
+  },
+
+  async leaveEvent(eventUid: string): Promise<void> {
+    await apiClient.post(`/events/${encodeURIComponent(eventUid)}/leave`);
+  },
+
+  async listParticipants(
+    eventUid: string,
+    params: {
+      sort?: "newest" | "oldest";
+      limit?: number;
+      offset?: number;
+    } = {},
+  ): Promise<EventParticipantPage> {
+    const { data } = await apiClient.get<EventParticipantPage>(
+      `/events/${encodeURIComponent(eventUid)}/participants`,
+      { params },
+    );
     return data;
   },
 };

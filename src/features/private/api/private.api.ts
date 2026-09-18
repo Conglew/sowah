@@ -1,12 +1,15 @@
 import { apiClient } from "@/src/services/api/http-client";
+import { friendsApi } from "@/src/features/friends/api/friends.api";
+import { usersApi } from "@/src/features/profile/api/users.api";
+import type { CountryCode } from "@/src/shared/utils/country-flag";
 import {
+  getConversationUnreadCounts,
   getMessageListPage,
   sendTextMessage,
   setConversationRead,
   toConversationID,
   toPrivateMessage,
 } from "@/src/services/chat";
-import { MOCK_PRIVATE_CONVERSATIONS } from "../data/mock-private-conversations";
 import type {
   ConversationsPage,
   InvitationResponse,
@@ -14,66 +17,61 @@ import type {
   PrivateConversation,
   PrivateMessage,
 } from "../types/private.types";
-import { sortConversationsByLastMessageDesc } from "../utils/private.utils";
-// USE_MOCK：後端沒好前用假資料頂著（後端好了改 false，各函式改走 apiClient 分支，呼叫端不用改）。
-// USE_CHAT：訊息收發改走 Tencent Cloud Chat，優先權高於 USE_MOCK（詳見 private.config.ts）。
-import { USE_CHAT, USE_MOCK } from "../private.config";
+// 好友／個人資料走 App API；訊息收發走 Tencent Cloud Chat。
+import { USE_CHAT } from "../private.config";
 
-const MOCK_FETCH_DELAY_MS = 500;
-const MOCK_WRITE_DELAY_MS = 200;
-
-// GET 對話（不管是清單那頁還是查單一個）都只給「最近幾則訊息」的預覽視窗，
-// 不是這個對話的完整歷史——完整歷史要透過 getMessagesPage 依需要往前補。
-// 點進聊天室至少載入 10 則訊息，符合「至少載入 10 則」的需求；
-// 訊息數比這個少的對話（大部分 mock 資料都只有 1 則）就是有多少給多少。
-const INITIAL_MESSAGES_WINDOW_SIZE = 10;
-
-function withInitialMessagesWindow(
-  conversation: PrivateConversation,
-): PrivateConversation {
+function toConversation(profile: {
+  user_uid: string;
+  user_id: string;
+  country: string;
+  avatar: { download_url: string } | null;
+}): PrivateConversation {
   return {
-    ...conversation,
-    messages: conversation.messages.slice(-INITIAL_MESSAGES_WINDOW_SIZE),
+    id: profile.user_uid,
+    username: profile.user_id,
+    countryCode: profile.country as CountryCode,
+    avatarUri: profile.avatar?.download_url ?? "",
+    isFriend: true,
+    messages: [],
   };
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+async function withLatestMessages(
+  conversations: PrivateConversation[],
+): Promise<PrivateConversation[]> {
+  if (!USE_CHAT || conversations.length === 0) return conversations;
 
-/**
- * 假的「後端資料庫」：整個 mock 版本共用同一份、可變動的記憶體資料（深copy 一份，不直接動到原始 mock 常數）。
- * sendMessage / respondToInvitation / markConversationRead 等寫入動作都會真的改到這裡，
- * 所以不管是分頁載入列表、分頁載入訊息、還是直接用 id 查單一對話，讀到的都是同一份、
- * 包含使用者先前操作過的內容——不會因為「重新整理時只回傳最初的假資料」而把示範操作洗掉。
- * 接上真的後端後，這個變數與下面操作它的所有函式都可以整個刪掉。
- */
-let mockDatabase: PrivateConversation[] = MOCK_PRIVATE_CONVERSATIONS.map(
-  (conversation) => ({
-    ...conversation,
-    messages: [...conversation.messages],
-  }),
-);
-
-function findConversation(conversationId: string): PrivateConversation | undefined {
-  return mockDatabase.find((conversation) => conversation.id === conversationId);
-}
-
-function replaceConversation(next: PrivateConversation): void {
-  mockDatabase = mockDatabase.map((conversation) =>
-    conversation.id === next.id ? next : conversation,
+  const conversationIDs = conversations.map((conversation) =>
+    toConversationID(conversation.id),
   );
-}
+  const unreadCounts = await getConversationUnreadCounts(conversationIDs).catch(
+    (error: unknown) => {
+      console.warn("[privateApi] 無法同步未讀數", error);
+      return {} as Record<string, number>;
+    },
+  );
 
-function buildMessageId(conversationId: string, tag: string): string {
-  const randomSuffix = Math.random().toString(36).slice(2, 8);
-  return `${conversationId}-${tag}-${Date.now()}-${randomSuffix}`;
-}
+  const results = await Promise.allSettled(
+    conversations.map(async (conversation) => {
+      const page = await getMessageListPage({
+        conversationID: toConversationID(conversation.id),
+      });
+      return {
+        ...conversation,
+        unreadCount: unreadCounts[toConversationID(conversation.id)] ?? 0,
+        messages: page.messageList.map(toPrivateMessage),
+      };
+    }),
+  );
 
-function buildAutoReplyText(response: InvitationResponse): string {
-  return response === "accepted"
-    ? "Yes! Accept the Invitation!"
-    : "No, maybe next time.";
+  return results.map((result, index) => {
+    if (result.status === "fulfilled") return result.value;
+    console.warn(
+      `[privateApi] 無法同步 ${conversations[index].id} 的最新訊息`,
+      result.reason,
+    );
+    return conversations[index];
+  });
 }
 
 export const privateApi = {
@@ -96,46 +94,26 @@ export const privateApi = {
   }): Promise<ConversationsPage> {
     const { cursor, pageSize, searchQuery } = params;
 
-    if (USE_MOCK) {
-      await delay(MOCK_FETCH_DELAY_MS);
-
-      const normalizedQuery = searchQuery.trim().toLowerCase();
-
-      const source = sortConversationsByLastMessageDesc(mockDatabase).filter(
+    const offset = cursor ? Number(cursor) : 0;
+    const page = await friendsApi.list({
+      sort: "newest",
+      limit: pageSize,
+      offset: Number.isFinite(offset) ? offset : 0,
+    });
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const conversations = page.friends
+      .map((friend) => toConversation(friend.profile))
+      .filter(
         (conversation) =>
           !normalizedQuery ||
           conversation.username.toLowerCase().includes(normalizedQuery),
       );
+    const nextOffset = page.offset + page.friends.length;
 
-      const cursorIndex = cursor
-        ? source.findIndex((conversation) => conversation.id === cursor)
-        : -1;
-
-      // cursor 對應的對話找不到（被搜尋條件濾掉／已刪除）時，findIndex 回 -1，
-      // 若直接 +1 會變成 0 → 整個第一頁被當成下一頁重發，listOrder 一次多 10 筆重複。
-      // 這裡明確視為「已到底」，寧可少給也不要重複。
-      if (cursor && cursorIndex === -1) {
-        return { conversations: [], nextCursor: null };
-      }
-
-      const startIndex = cursorIndex + 1;
-      const pageItems = source.slice(startIndex, startIndex + pageSize);
-      const isLastPage = startIndex + pageItems.length >= source.length;
-
-      return {
-        conversations: pageItems.map(withInitialMessagesWindow),
-        nextCursor: isLastPage
-          ? null
-          : (pageItems[pageItems.length - 1]?.id ?? null),
-      };
-    }
-
-    const { data } = await apiClient.get<ConversationsPage>(
-      "/private/conversations",
-      { params: { cursor, pageSize, q: searchQuery || undefined } },
-    );
-
-    return data;
+    return {
+      conversations: await withLatestMessages(conversations),
+      nextCursor: nextOffset < page.total ? String(nextOffset) : null,
+    };
   },
 
   /**
@@ -145,17 +123,19 @@ export const privateApi = {
   async getConversationById(
     conversationId: string,
   ): Promise<PrivateConversation | null> {
-    if (USE_MOCK) {
-      await delay(MOCK_FETCH_DELAY_MS);
-      const found = findConversation(conversationId);
-      return found ? withInitialMessagesWindow(found) : null;
+    try {
+      return toConversation(await usersApi.getById(conversationId));
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "response" in error &&
+        (error as { response?: { status?: number } }).response?.status === 404
+      ) {
+        return null;
+      }
+      throw error;
     }
-
-    const { data } = await apiClient.get<PrivateConversation>(
-      `/private/conversations/${conversationId}`,
-    );
-
-    return data;
   },
 
   /**
@@ -187,28 +167,6 @@ export const privateApi = {
       };
     }
 
-    if (USE_MOCK) {
-      await delay(MOCK_FETCH_DELAY_MS);
-
-      const allMessages = findConversation(conversationId)?.messages ?? [];
-
-      const endIndex = cursor
-        ? allMessages.findIndex((message) => message.id === cursor)
-        : allMessages.length;
-
-      if (endIndex <= 0) {
-        return { messages: [], nextCursor: null };
-      }
-
-      const startIndex = Math.max(0, endIndex - pageSize);
-      const pageItems = allMessages.slice(startIndex, endIndex);
-
-      return {
-        messages: pageItems,
-        nextCursor: startIndex > 0 ? (pageItems[0]?.id ?? null) : null,
-      };
-    }
-
     const { data } = await apiClient.get<MessagesPage>(
       `/private/conversations/${conversationId}/messages`,
       { params: { cursor, pageSize } },
@@ -225,30 +183,11 @@ export const privateApi = {
     const trimmedText = text.trim();
 
     if (USE_CHAT) {
-      const sent = await sendTextMessage({ to: conversationId, text: trimmedText });
-      return toPrivateMessage(sent);
-    }
-
-    if (USE_MOCK) {
-      await delay(MOCK_WRITE_DELAY_MS);
-
-      const message: PrivateMessage = {
-        id: buildMessageId(conversationId, "msg"),
-        kind: "text",
-        senderId: "me",
+      const sent = await sendTextMessage({
+        to: conversationId,
         text: trimmedText,
-        createdAt: new Date().toISOString(),
-      };
-
-      const conversation = findConversation(conversationId);
-      if (conversation) {
-        replaceConversation({
-          ...conversation,
-          messages: [...conversation.messages, message],
-        });
-      }
-
-      return message;
+      });
+      return toPrivateMessage(sent);
     }
 
     const { data } = await apiClient.post<PrivateMessage>(
@@ -269,44 +208,6 @@ export const privateApi = {
     messageId: string,
     response: InvitationResponse,
   ): Promise<PrivateMessage | null> {
-    if (USE_MOCK) {
-      await delay(MOCK_WRITE_DELAY_MS);
-
-      const conversation = findConversation(conversationId);
-      const targetMessage = conversation?.messages.find(
-        (message) => message.id === messageId,
-      );
-
-      if (
-        !conversation ||
-        !targetMessage?.invitation ||
-        targetMessage.invitation.response === response
-      ) {
-        return null;
-      }
-
-      const autoReply: PrivateMessage = {
-        id: buildMessageId(conversationId, "auto"),
-        kind: "text",
-        senderId: "me",
-        text: buildAutoReplyText(response),
-        isAuto: true,
-        createdAt: new Date().toISOString(),
-      };
-
-      const updatedMessages = conversation.messages.map((message) => {
-        if (message.id !== messageId || !message.invitation) return message;
-        return { ...message, invitation: { ...message.invitation, response } };
-      });
-
-      replaceConversation({
-        ...conversation,
-        messages: [...updatedMessages, autoReply],
-      });
-
-      return autoReply;
-    }
-
     const { data } = await apiClient.post<PrivateMessage | null>(
       `/private/conversations/${conversationId}/invitations/${messageId}/respond`,
       { response },
@@ -319,17 +220,6 @@ export const privateApi = {
   async markConversationRead(conversationId: string): Promise<void> {
     if (USE_CHAT) {
       await setConversationRead(toConversationID(conversationId));
-      return;
-    }
-
-    if (USE_MOCK) {
-      await delay(150);
-
-      const conversation = findConversation(conversationId);
-      if (conversation?.unreadCount) {
-        replaceConversation({ ...conversation, unreadCount: 0 });
-      }
-
       return;
     }
 

@@ -21,7 +21,9 @@ const ALERT_BADGE_COLOR = "#FF8100";
 
 export default function GroupRow({ group, onPress }: Props) {
   const isPending = !!group.hasPendingInvitation;
-  const dateLabel = group.lastMessageAt ? formatGroupListDate(group.lastMessageAt) : "";
+  const dateLabel = group.lastMessageAt
+    ? formatGroupListDate(group.lastMessageAt)
+    : "";
 
   return (
     <TouchableOpacity activeOpacity={0.7} onPress={onPress}>

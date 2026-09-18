@@ -4,6 +4,8 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -11,6 +13,8 @@ import {
 } from "react-native";
 
 import { haptics } from "@/src/shared/utils/haptics";
+import { friendsApi } from "@/src/features/friends/api/friends.api";
+import { useAuthStore } from "@/src/stores/auth.store";
 import { useProfile } from "../hooks/useProfile";
 import type { ProfileVariant } from "../types/profile.types";
 import {
@@ -35,6 +39,7 @@ export function ProfileView({ variant, userId }: Props) {
   const sheetRef = useRef<BottomSheet>(null);
   const { height } = useWindowDimensions();
   const { profile, isLoading, error } = useProfile({ variant, userId });
+  const signOut = useAuthStore((state) => state.signOut);
 
   // 折疊時卡片露出的高度 → 傳給背景當底部 padding
   const collapsedSheetHeight = useMemo(
@@ -132,12 +137,43 @@ export function ProfileView({ variant, userId }: Props) {
             onPressPrimary={() => {
               if (variant === "self") {
                 router.push("/edit-profile");
+              } else {
+                void friendsApi
+                  .sendRequest(profile.id)
+                  .then(() => Alert.alert("好友邀請已送出"))
+                  .catch((requestError: unknown) => {
+                    const message =
+                      requestError instanceof Error
+                        ? requestError.message
+                        : "請稍後再試";
+                    Alert.alert("無法送出好友邀請", message);
+                  });
               }
             }}
             onPressSecondary={() => {}}
             onPressCheckIn={() => {}}
             onPressMoreContent={() => {}}
           />
+          {__DEV__ && variant === "self" && (
+            <Pressable
+              style={({ pressed }) => [
+                styles.devSignOutButton,
+                pressed && styles.devSignOutPressed,
+              ]}
+              onPress={() => {
+                Alert.alert("Sign out", "要登出並改用其他帳號登入嗎？", [
+                  { text: "取消", style: "cancel" },
+                  {
+                    text: "登出",
+                    style: "destructive",
+                    onPress: () => void signOut(),
+                  },
+                ]);
+              }}
+            >
+              <Text style={styles.devSignOutText}>Sign out (Dev)</Text>
+            </Pressable>
+          )}
         </BottomSheetScrollView>
       </BottomSheet>
     </View>
@@ -180,5 +216,24 @@ const styles = StyleSheet.create({
   sheetContent: {
     paddingTop: 8,
     paddingBottom: 40,
+  },
+  devSignOutButton: {
+    height: 44,
+    marginHorizontal: 20,
+    marginTop: 20,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFF1F0",
+    borderWidth: 1,
+    borderColor: "#FFCCC7",
+  },
+  devSignOutPressed: {
+    opacity: 0.65,
+  },
+  devSignOutText: {
+    color: "#CF1322",
+    fontSize: 14,
+    fontWeight: "700",
   },
 });

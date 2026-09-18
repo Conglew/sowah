@@ -1,6 +1,8 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,6 +17,7 @@ import EventDateTimePicker from "@/src/features/events/components/EventDateTimeP
 import ParticipantsPicker from "@/src/features/events/components/ParticipantsPicker";
 import PrivacyPicker from "@/src/features/events/components/PrivacyPicker";
 import type { TopicPrivacy } from "@/src/features/events/types/events.types";
+import { eventsApi } from "@/src/features/events/api/events.api";
 
 export default function CreateTopicPage() {
   const router = useRouter();
@@ -25,6 +28,38 @@ export default function CreateTopicPage() {
   // Private 目前需要 Premium 才能選，實際上只有 Public 可選，
   // 硬要使用者「先選一次」沒有意義，所以直接預設 public。
   const [privacy, setPrivacy] = useState<TopicPrivacy>("public");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleCreate = async () => {
+    if (!title.trim() || !selectedDate || !selectedTime || !participantCount) {
+      Alert.alert("資料未完成", "請填寫標題、日期、時間與參加人數。");
+      return;
+    }
+
+    const start = new Date(selectedDate);
+    start.setHours(selectedTime.getHours(), selectedTime.getMinutes(), 0, 0);
+    setIsSubmitting(true);
+    try {
+      await eventsApi.create({
+        title: title.trim(),
+        description: description.trim(),
+        start: start.toISOString(),
+        duration_minutes: 30,
+        kind: participantCount === 2 ? "one-on-one" : "multiple",
+        visibility: privacy,
+      });
+      Alert.alert("建立成功", "活動已建立。", [
+        { text: "完成", onPress: () => router.back() },
+      ]);
+    } catch (error) {
+      console.warn("[CreateTopicPage] create failed", error);
+      Alert.alert("建立失敗", "請確認時間與欄位後再試一次。");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
@@ -54,6 +89,8 @@ export default function CreateTopicPage() {
           <Text style={styles.label}>Topic Title</Text>
 
           <TextInput
+            value={title}
+            onChangeText={setTitle}
             style={styles.input}
             placeholder="Ex: Travel"
             placeholderTextColor="#C8C8C8"
@@ -64,6 +101,8 @@ export default function CreateTopicPage() {
           <Text style={styles.label}>Discussion Guide</Text>
 
           <TextInput
+            value={description}
+            onChangeText={setDescription}
             style={[styles.input, styles.textArea]}
             placeholder="Ex: What is your favorite travel experience? Where did you go? What made the trip memorable? Would you like to visit again?"
             placeholderTextColor="#C8C8C8"
@@ -98,8 +137,17 @@ export default function CreateTopicPage() {
           <PrivacyPicker value={privacy} onChange={setPrivacy} />
         </View>
 
-        <TouchableOpacity activeOpacity={0.8} style={styles.submitButton}>
-          <Text style={styles.submitButtonText}>Create</Text>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          style={[styles.submitButton, isSubmitting && styles.buttonDisabled]}
+          disabled={isSubmitting}
+          onPress={() => void handleCreate()}
+        >
+          {isSubmitting ? (
+            <ActivityIndicator color="#FFFFFF" size="small" />
+          ) : (
+            <Text style={styles.submitButtonText}>Create</Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -183,5 +231,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     color: "#FFFFFF",
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
 });

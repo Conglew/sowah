@@ -22,7 +22,10 @@ type UseJoinEventResult = {
   joiningEventId: string | null;
   /** 這個 session 內已成功報名的活動 id */
   joinedEventIds: Set<string>;
+  leftEventIds: Set<string>;
   joinEvent: (event: JoinableEvent) => Promise<void>;
+  leavingEventId: string | null;
+  leaveEvent: (event: JoinableEvent) => Promise<void>;
 };
 
 /** 行事曆各種結果對應的提示文字。Android 拿不到最終結果，所以措辭不能斷定「已加入」。 */
@@ -54,6 +57,8 @@ function buildCalendarMessage(result: CalendarSyncResult): string {
 export function useJoinEvent(): UseJoinEventResult {
   const [joiningEventId, setJoiningEventId] = useState<string | null>(null);
   const [joinedEventIds, setJoinedEventIds] = useState<Set<string>>(new Set());
+  const [leftEventIds, setLeftEventIds] = useState<Set<string>>(new Set());
+  const [leavingEventId, setLeavingEventId] = useState<string | null>(null);
 
   const joinEvent = useCallback(
     async (event: JoinableEvent) => {
@@ -72,6 +77,11 @@ export function useJoinEvent(): UseJoinEventResult {
       }
 
       setJoinedEventIds((previous) => new Set(previous).add(event.id));
+      setLeftEventIds((previous) => {
+        const next = new Set(previous);
+        next.delete(event.id);
+        return next;
+      });
 
       const { startDate, endDate } = toEventTimeRange({
         date: event.date,
@@ -91,5 +101,35 @@ export function useJoinEvent(): UseJoinEventResult {
     [joinedEventIds, joiningEventId],
   );
 
-  return { joiningEventId, joinedEventIds, joinEvent };
+  const leaveEvent = useCallback(
+    async (event: JoinableEvent) => {
+      if (leavingEventId !== null) return;
+      setLeavingEventId(event.id);
+      try {
+        await eventsApi.leaveEvent(event.id);
+        setJoinedEventIds((previous) => {
+          const next = new Set(previous);
+          next.delete(event.id);
+          return next;
+        });
+        setLeftEventIds((previous) => new Set(previous).add(event.id));
+        Alert.alert(event.title, "已取消參加活動。");
+      } catch (error) {
+        console.warn("[useJoinEvent] leave failed", error);
+        Alert.alert("取消失敗", "請稍後再試一次。");
+      } finally {
+        setLeavingEventId(null);
+      }
+    },
+    [leavingEventId],
+  );
+
+  return {
+    joiningEventId,
+    joinedEventIds,
+    leftEventIds,
+    joinEvent,
+    leavingEventId,
+    leaveEvent,
+  };
 }

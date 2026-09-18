@@ -1,3 +1,5 @@
+import type { UserProfile } from "@/src/features/profile/types";
+
 /**
  * 建立 Topic 相關的 domain 型別。
  * 用字串 union 而不是 boolean（isPublic）：之後若要加 "friends_only" 之類的第三種可見度，
@@ -44,4 +46,51 @@ export type JoinEventResult = {
   eventId: string;
   /** 後端是否已排入通知信（純提示用，前端不依賴它做流程判斷） */
   notificationQueued: boolean;
+};
+export type EventKind = "one-on-one" | "multiple";
+export type EventVisibility = "public" | "private";
+
+export type EventResource = {
+  event_uid: string;
+  creator_uid: string;
+  title: string;
+  description: string;
+  start: string;
+  end: string;
+  duration_minutes: number;
+  kind: EventKind;
+  visibility: EventVisibility;
+  capacity: number;
+  participant_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateEventRequest = {
+  title: string;
+  description?: string;
+  start: string;
+  duration_minutes: number;
+  kind: EventKind;
+  visibility: EventVisibility;
+};
+
+export type UpdateEventRequest = Partial<
+  Pick<
+    CreateEventRequest,
+    "title" | "description" | "start" | "duration_minutes" | "visibility"
+  >
+>;
+
+export type EventParticipant = {
+  user_uid: string;
+  joined_at: string;
+  profile: UserProfile;
+};
+
+export type EventParticipantPage = {
+  participants: EventParticipant[];
+  limit: number;
+  offset: number;
+  total: number;
 };

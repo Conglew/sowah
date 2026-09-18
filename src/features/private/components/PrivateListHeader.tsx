@@ -1,4 +1,5 @@
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useRouter } from "expo-router";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import ChatAddIcon from "@/src/assets/icons/chat_add_icon.svg";
 
@@ -8,10 +9,7 @@ import ChatAddIcon from "@/src/assets/icons/chat_add_icon.svg";
  * 才會跟著列表一起上下拖動。
  */
 export default function PrivateListHeader() {
-  const handleAddFriend = () => {
-    // TODO: 目前設計稿只定義了「新增好友」入口，尚未有對應 API / 流程，先用 Alert 佔位。
-    Alert.alert("Add Friend", "此功能尚未開放");
-  };
+  const router = useRouter();
 
   return (
     <View style={styles.container}>
@@ -21,7 +19,7 @@ export default function PrivateListHeader() {
         <TouchableOpacity
           activeOpacity={0.7}
           style={styles.addButton}
-          onPress={handleAddFriend}
+          onPress={() => router.push("/friends")}
           accessibilityRole="button"
           accessibilityLabel="Add friend"
         >

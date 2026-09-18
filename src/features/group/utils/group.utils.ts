@@ -21,7 +21,9 @@ export function formatEventParticipants(event: GroupUpcomingEvent): string {
  * 依「最後訊息時間」新到舊排序。
  * 列表畫面跟 mock API 的分頁邏輯要用同一套排序，拆出來共用（比照 private.utils 的做法）。
  */
-export function sortGroupsByLastMessageDesc(groups: GroupSummary[]): GroupSummary[] {
+export function sortGroupsByLastMessageDesc(
+  groups: GroupSummary[],
+): GroupSummary[] {
   return [...groups].sort((a, b) =>
     (b.lastMessageAt ?? "").localeCompare(a.lastMessageAt ?? ""),
   );

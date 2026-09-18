@@ -7,7 +7,6 @@ import {
   RefreshControl,
   StyleSheet,
   Text,
-  TouchableWithoutFeedback,
   View,
 } from "react-native";
 
@@ -25,7 +24,8 @@ import type { GroupSummary, GroupVisibility } from "../types/group.types";
 
 export default function GroupListPage() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeVisibility, setActiveVisibility] = useState<GroupVisibility>("public");
+  const [activeVisibility, setActiveVisibility] =
+    useState<GroupVisibility>("public");
 
   const {
     groups,
@@ -37,14 +37,7 @@ export default function GroupListPage() {
     refresh,
     loadMore,
   } = useGroups(activeVisibility, searchQuery);
-
-  const {
-    suggestedGroups,
-    isLoading: isSuggestedLoading,
-    isLoadingMore: isSuggestedLoadingMore,
-    loadMore: loadMoreSuggested,
-    reload: reloadSuggested,
-  } = useSuggestedGroups();
+  const { suggestedGroups, reload: reloadSuggested } = useSuggestedGroups();
 
   const listRef = useRef<FlashListRef<GroupSummary>>(null);
 
@@ -63,85 +56,79 @@ export default function GroupListPage() {
   };
 
   const handleRefresh = () => {
-    // 下拉刷新時，推薦群組與群組列表一起重載
     void Promise.all([refresh(), reloadSuggested()]);
   };
 
   return (
-    // 點列表空白處（不是點在 row / 搜尋欄本身）就收起鍵盤；拖動列表時也會收起
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <View style={styles.container}>
-        {/* 固定在最上面，不隨列表滾動 */}
-        <GroupListHeader />
-
-        <FlashList
-          ref={listRef}
-          data={groups}
-          keyExtractor={(item) => item.id}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.listContent}
-          keyboardDismissMode="on-drag"
-          keyboardShouldPersistTaps="handled"
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={handleRefresh}
-              tintColor={colors.brand}
-              colors={[colors.brand]}
-            />
-          }
-          // 搜尋欄、推薦群組、Your Group 標題 + tab 都跟著列表一起捲動；
-          // 只有最上面的 Group 標題列（GroupListHeader）固定不動。
-          ListHeaderComponent={
-            <View>
-              <GroupSearchBar
-                searchQuery={searchQuery}
-                onSearchQueryChange={setSearchQuery}
-              />
-              <SuggestedGroupsSection
-                suggestedGroups={suggestedGroups}
-                isLoading={isSuggestedLoading}
-                isLoadingMore={isSuggestedLoadingMore}
-                onEndReached={() => {
-                  void loadMoreSuggested();
-                }}
-              />
-              <GroupTabs
-                activeVisibility={activeVisibility}
-                counts={counts}
-                onVisibilityChange={setActiveVisibility}
-              />
-            </View>
-          }
-          renderItem={({ item }) => (
-            <GroupRow group={item} onPress={() => handlePressGroup(item)} />
-          )}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
-          // 分批載入：捲到接近底部（剩 40% 一個畫面高度時）就補下一頁
-          onEndReachedThreshold={0.4}
-          onEndReached={() => {
-            void loadMore();
-          }}
-          ListFooterComponent={
-            <ListFooterStatus
-              isLoadingMore={isLoadingMore}
-              hasMore={hasMore}
-              itemCount={groups.length}
-              endMessage="沒有更多群組了"
-            />
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyWrap}>
-              {isLoading ? (
-                <ActivityIndicator color={colors.brand} />
-              ) : (
-                <Text style={styles.emptyText}>找不到符合的群組</Text>
-              )}
-            </View>
-          }
+    <View style={styles.container}>
+      {/* 固定在最上面，不隨列表滾動 */}
+      <GroupListHeader />
+      <View style={styles.fixedSearch}>
+        <GroupSearchBar
+          searchQuery={searchQuery}
+          onSearchQueryChange={setSearchQuery}
         />
       </View>
-    </TouchableWithoutFeedback>
+
+      <FlashList
+        style={styles.list}
+        ref={listRef}
+        data={groups}
+        keyExtractor={(item) => item.id}
+        showsVerticalScrollIndicator={false}
+        alwaysBounceVertical
+        contentContainerStyle={styles.listContent}
+        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.brand}
+            colors={[colors.brand]}
+            progressViewOffset={8}
+          />
+        }
+        // 搜尋欄、推薦群組、Your Group 標題 + tab 都跟著列表一起捲動；
+        // 只有最上面的 Group 標題列（GroupListHeader）固定不動。
+        ListHeaderComponent={
+          <View>
+            <SuggestedGroupsSection groups={suggestedGroups} />
+            <GroupTabs
+              activeVisibility={activeVisibility}
+              counts={counts}
+              onVisibilityChange={setActiveVisibility}
+            />
+          </View>
+        }
+        renderItem={({ item }) => (
+          <GroupRow group={item} onPress={() => handlePressGroup(item)} />
+        )}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        // 分批載入：捲到接近底部（剩 40% 一個畫面高度時）就補下一頁
+        onEndReachedThreshold={0.4}
+        onEndReached={() => {
+          void loadMore();
+        }}
+        ListFooterComponent={
+          <ListFooterStatus
+            isLoadingMore={isLoadingMore}
+            hasMore={hasMore}
+            itemCount={groups.length}
+            endMessage="沒有更多群組了"
+          />
+        }
+        ListEmptyComponent={
+          <View style={styles.emptyWrap}>
+            {isLoading ? (
+              <ActivityIndicator color={colors.brand} />
+            ) : (
+              <Text style={styles.emptyText}>找不到符合的群組</Text>
+            )}
+          </View>
+        }
+      />
+    </View>
   );
 }
 
@@ -153,6 +140,12 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: SCREEN_HORIZONTAL_PADDING,
     paddingBottom: 84,
+  },
+  list: {
+    flex: 1,
+  },
+  fixedSearch: {
+    paddingHorizontal: SCREEN_HORIZONTAL_PADDING,
   },
   separator: {
     // 與 PrivateListPage 相同：比 hairlineWidth 粗一階，但仍隨裝置 DPR 縮放

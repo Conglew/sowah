@@ -1,4 +1,8 @@
-import TencentCloudChat, { type ChatSDK, type Message } from "@tencentcloud/chat";
+import TencentCloudChat, {
+  type ChatSDK,
+  type Conversation,
+  type Message,
+} from "@tencentcloud/chat";
 
 import { ENV } from "@/src/config/env";
 
@@ -81,7 +85,24 @@ function waitForSDKReady(sdk: ChatSDK, timeoutMs = 8000): Promise<void> {
 }
 
 /** 登入 Chat。userSig 由 chat-usersig.ts 提供（測試期本機簽、正式期後端簽） */
-export async function loginChat(userID: string, userSig: string): Promise<void> {
+export async function loginChat(
+  userID: string,
+  userSig: string,
+): Promise<void> {
+  const sdk = getChatSDK();
+  const currentUserID = sdk.getLoginUser();
+
+  // Metro reload / Fast Refresh 會保留 SDK singleton，但模組內的 loggedIn 可能已重設。
+  // 若 Firebase/App 帳號已切換，Tencent Chat 不允許在舊帳號仍登入時直接 login 新帳號，
+  // 必須先清掉舊帳號與記憶體中的對話資料。
+  if (currentUserID && currentUserID !== userID) {
+    await sdk.logout();
+    loggedIn = false;
+  } else if (currentUserID === userID && sdk.isReady()) {
+    loggedIn = true;
+    return;
+  }
+
   if (loggedIn) return;
   // auth.store 的 restore / login 兩條路徑都會 fire-and-forget 呼叫這支，
   // 只靠 loggedIn 這個 boolean 擋不住「兩邊幾乎同時進來、當下還是 false」的競態，
@@ -89,8 +110,7 @@ export async function loginChat(userID: string, userSig: string): Promise<void> 
   if (loginPromise) return loginPromise;
 
   loginPromise = (async () => {
-    const sdk = getChatSDK();
-    const ready = waitForSDKReady(sdk);
+    const ready = sdk.isReady() ? Promise.resolve() : waitForSDKReady(sdk);
     await sdk.login({ userID, userSig });
     await ready;
     loggedIn = true;
@@ -102,7 +122,7 @@ export async function loginChat(userID: string, userSig: string): Promise<void> 
 }
 
 export async function logoutChat(): Promise<void> {
-  if (!chat || !loggedIn) return;
+  if (!chat || (!loggedIn && !chat.getLoginUser())) return;
   try {
     await chat.logout();
   } finally {
@@ -115,12 +135,40 @@ export function isChatLoggedIn(): boolean {
   return loggedIn;
 }
 
+/** 等待 Chat 完成登入並進入可呼叫訊息 API 的 ready 狀態。 */
+export async function waitForChatReady(timeoutMs = 8000): Promise<void> {
+  const sdk = getChatSDK();
+  if (sdk.isReady()) return;
+  await waitForSDKReady(sdk, timeoutMs);
+}
+
+/** 取得指定對話在 Tencent 雲端同步後的未讀數。 */
+export async function getConversationUnreadCounts(
+  conversationIDs: string[],
+): Promise<Record<string, number>> {
+  if (conversationIDs.length === 0) return {};
+  await waitForChatReady();
+
+  const result = (await getChatSDK().getConversationList(
+    conversationIDs,
+  )) as ChatResult<{ conversationList: Conversation[] }>;
+
+  return Object.fromEntries(
+    result.data.conversationList.map((conversation) => [
+      conversation.conversationID,
+      conversation.unreadCount,
+    ]),
+  );
+}
+
 /** 分頁往前拉訊息；nextReqMessageID 為 undefined 代表拉最新一批 */
 export async function getMessageListPage(params: {
   conversationID: string;
   nextReqMessageID?: string;
 }): Promise<GetMessageListResult> {
   const { conversationID, nextReqMessageID } = params;
+
+  await waitForChatReady();
 
   const res = (await getChatSDK().getMessageList({
     conversationID,
@@ -135,6 +183,7 @@ export async function sendTextMessage(params: {
   to: string;
   text: string;
 }): Promise<Message> {
+  await waitForChatReady();
   const sdk = getChatSDK();
 
   const message = sdk.createTextMessage({
@@ -143,11 +192,16 @@ export async function sendTextMessage(params: {
     payload: { text: params.text },
   });
 
-  const res = (await sdk.sendMessage(message)) as ChatResult<{ message: Message }>;
+  const res = (await sdk.sendMessage(message)) as ChatResult<{
+    message: Message;
+  }>;
   return res.data.message;
 }
 
 /** 把某個對話標記為已讀 */
-export async function setConversationRead(conversationID: string): Promise<void> {
+export async function setConversationRead(
+  conversationID: string,
+): Promise<void> {
+  await waitForChatReady();
   await getChatSDK().setMessageRead({ conversationID });
 }

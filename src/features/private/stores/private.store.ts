@@ -23,13 +23,19 @@ type PrivateStoreState = {
   upsertConversations: (conversations: PrivateConversation[]) => void;
 
   /** 把「更早的一批訊息」接到某個對話目前已載入訊息的最前面（聊天室往上滑載入更多用） */
-  prependMessages: (conversationId: string, olderMessages: PrivateMessage[]) => void;
+  prependMessages: (
+    conversationId: string,
+    olderMessages: PrivateMessage[],
+  ) => void;
 
   /** 送出一則新訊息，接到某個對話目前已載入訊息的最後面 */
   appendMessage: (conversationId: string, message: PrivateMessage) => void;
 
   /** 未讀數字 +1（全域 listener 收到「非當前對話」的新訊息時用；對話不在快取則忽略） */
   incrementUnread: (conversationId: string) => void;
+
+  /** 以 Tencent conversation 的雲端值覆蓋未讀數。 */
+  setUnreadCount: (conversationId: string, unreadCount: number) => void;
 
   /** 更新某則邀請訊息的回覆狀態，並在後面接一則自動回覆訊息 */
   applyInvitationResponse: (
@@ -69,7 +75,9 @@ function mergeConversation(
 ): PrivateConversation {
   if (!existing) return incoming;
 
-  const messageById = new Map(existing.messages.map((message) => [message.id, message]));
+  const messageById = new Map(
+    existing.messages.map((message) => [message.id, message]),
+  );
 
   for (const message of incoming.messages) {
     messageById.set(message.id, message);
@@ -107,7 +115,10 @@ export const usePrivateStore = create<PrivateStoreState>((set) => ({
       const next = { ...state.conversationsById };
 
       for (const conversation of conversations) {
-        next[conversation.id] = mergeConversation(next[conversation.id], conversation);
+        next[conversation.id] = mergeConversation(
+          next[conversation.id],
+          conversation,
+        );
       }
 
       return { conversationsById: next };
@@ -143,7 +154,9 @@ export const usePrivateStore = create<PrivateStoreState>((set) => ({
       if (!conversation) return state;
 
       // 依 id 去重：斷線重連 / 同一則被多處觸發時，避免同一則訊息被塞兩次。
-      if (conversation.messages.some((existing) => existing.id === message.id)) {
+      if (
+        conversation.messages.some((existing) => existing.id === message.id)
+      ) {
         return state;
       }
 
@@ -154,7 +167,10 @@ export const usePrivateStore = create<PrivateStoreState>((set) => ({
           ...state.conversationsById,
           [conversationId]: {
             ...conversation,
-            messages: sortMessagesByCreatedAt([...conversation.messages, message]),
+            messages: sortMessagesByCreatedAt([
+              ...conversation.messages,
+              message,
+            ]),
           },
         },
       };
@@ -173,6 +189,21 @@ export const usePrivateStore = create<PrivateStoreState>((set) => ({
             ...conversation,
             unreadCount: (conversation.unreadCount ?? 0) + 1,
           },
+        },
+      };
+    });
+  },
+
+  setUnreadCount: (conversationId, unreadCount) => {
+    set((state) => {
+      const conversation = state.conversationsById[conversationId];
+      if (!conversation || conversation.unreadCount === unreadCount)
+        return state;
+
+      return {
+        conversationsById: {
+          ...state.conversationsById,
+          [conversationId]: { ...conversation, unreadCount },
         },
       };
     });

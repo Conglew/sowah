@@ -1,9 +1,10 @@
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   GestureResponderEvent,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,10 +13,38 @@ import {
 } from "react-native";
 
 import { getCountryFlag } from "@/src/shared/utils/country-flag";
+import { useAuthStore } from "@/src/stores/auth.store";
 import { colors } from "@/src/theme/colors";
 import { useJoinEvent } from "../hooks/useJoinEvent";
+import { eventsApi } from "../api/events.api";
+import type { EventResource } from "../types/events.types";
 
 dayjs.extend(customParseFormat);
+
+const MIN_LOADING_MS = 250;
+
+function minimumLoadingDelay(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, MIN_LOADING_MS));
+}
+
+async function listAllPublicEvents(start: string, end: string) {
+  const events: EventResource[] = [];
+  const pageSize = 20;
+  let offset = 0;
+
+  while (true) {
+    const page = await eventsApi.listPublic({
+      start,
+      end,
+      sort: "oldest",
+      limit: pageSize,
+      offset,
+    });
+    events.push(...page.events);
+    offset += page.events.length;
+    if (page.events.length === 0 || offset >= page.total) return events;
+  }
+}
 
 type EventSchedulePanelProps = {
   visible: boolean;
@@ -30,7 +59,7 @@ type MockParticipant = {
   countryCode: string;
 };
 
-type MockEvent = {
+type ScheduleEvent = {
   id: string;
   date: string;
   title: string;
@@ -40,6 +69,8 @@ type MockEvent = {
   maxParticipants: number;
   discussionGuide: string;
   participants: MockParticipant[];
+  participantCount?: number;
+  creatorUid?: string;
 };
 const todayId = dayjs().format("YYYY-MM-DD");
 const tomorrowId = dayjs().add(1, "day").format("YYYY-MM-DD");
@@ -49,7 +80,7 @@ const yesterdayId = dayjs().subtract(1, "day").format("YYYY-MM-DD");
 const nextAvailableTime = dayjs().add(1, "hour").minute(0).second(0);
 const laterAvailableTime = dayjs().add(2, "hour").minute(30).second(0);
 
-const mockEvents: MockEvent[] = [
+const fallbackEvents: ScheduleEvent[] = [
   {
     id: "event-1",
     date: todayId,
@@ -183,29 +214,41 @@ const timeToMinutes = (time: string) => {
   return hour * 60 + minute;
 };
 
-const sortEventsByTime = (events: MockEvent[]) => {
+const sortEventsByTime = (events: ScheduleEvent[]) => {
   return [...events].sort((a, b) => {
     return timeToMinutes(a.startTime) - timeToMinutes(b.startTime);
   });
 };
 
-const getEventDateTime = (event: MockEvent) => {
+/** 可參加的活動先依 30 分鐘時段排序；已開始／已額滿的活動移到當天最下面。 */
+const sortJoinableEvents = (events: ScheduleEvent[]) => {
+  return [...events].sort((a, b) => {
+    const availabilityOrder = Number(canJoinEvent(b)) - Number(canJoinEvent(a));
+    if (availabilityOrder !== 0) return availabilityOrder;
+    return timeToMinutes(a.startTime) - timeToMinutes(b.startTime);
+  });
+};
+
+const getEventDateTime = (event: ScheduleEvent) => {
   return dayjs(`${event.date} ${event.startTime}`, "YYYY-MM-DD HH:mm");
 };
 
-const isEventExpired = (event: MockEvent) => {
+const isEventExpired = (event: ScheduleEvent) => {
   return getEventDateTime(event).isBefore(dayjs());
 };
 
-const isEventFull = (event: MockEvent) => {
-  return event.participants.length >= event.maxParticipants;
+const isEventFull = (event: ScheduleEvent) => {
+  return (
+    (event.participantCount ?? event.participants.length) >=
+    event.maxParticipants
+  );
 };
 
-const canJoinEvent = (event: MockEvent) => {
+const canJoinEvent = (event: ScheduleEvent) => {
   return !event.isJoinedByMe && !isEventExpired(event) && !isEventFull(event);
 };
 
-const getJoinDisabledReason = (event: MockEvent) => {
+const getJoinDisabledReason = (event: ScheduleEvent) => {
   if (event.isJoinedByMe) {
     return "Already joined";
   }
@@ -221,6 +264,47 @@ const getJoinDisabledReason = (event: MockEvent) => {
   return null;
 };
 
+function toScheduleEvent(
+  event: EventResource,
+  isJoinedByMe: boolean,
+): ScheduleEvent {
+  const start = dayjs(event.start);
+  return {
+    id: event.event_uid,
+    date: start.format("YYYY-MM-DD"),
+    title: event.title,
+    startTime: start.format("HH:mm"),
+    color: isJoinedByMe ? "#A8A8A8" : colors.brandWarm,
+    isJoinedByMe,
+    maxParticipants: event.capacity,
+    participantCount: event.participant_count,
+    creatorUid: event.creator_uid,
+    discussionGuide: event.description,
+    participants: [],
+  };
+}
+
+function isEventResource(value: unknown): value is EventResource {
+  if (typeof value !== "object" || value === null) return false;
+  const event = value as Partial<EventResource>;
+  return (
+    typeof event.event_uid === "string" &&
+    typeof event.title === "string" &&
+    typeof event.description === "string" &&
+    typeof event.start === "string" &&
+    typeof event.capacity === "number" &&
+    typeof event.participant_count === "number"
+  );
+}
+
+function shouldUseFallback(error: unknown): boolean {
+  if (typeof error !== "object" || error === null || !("response" in error)) {
+    return false;
+  }
+  const status = (error as { response?: { status?: number } }).response?.status;
+  return status === 404 || status === 405 || status === 501;
+}
+
 export default function EventSchedulePanel({
   visible,
   selectedDate,
@@ -230,17 +314,121 @@ export default function EventSchedulePanel({
   const [participantListEventId, setParticipantListEventId] = useState<
     string | null
   >(null);
+  // 不要用 fallback 當初始值，否則真實 API 回來前會先閃一下假資料。
+  const [events, setEvents] = useState<ScheduleEvent[]>([]);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(false);
+  const [isRefreshingEvents, setIsRefreshingEvents] = useState(false);
+  const [refreshToken, setRefreshToken] = useState(0);
+  const refreshRequestedRef = useRef(false);
 
-  const { joiningEventId, joinedEventIds, joinEvent } = useJoinEvent();
+  const currentUserUid = useAuthStore((state) => state.user?.user_uid);
+  const {
+    joiningEventId,
+    joinedEventIds,
+    leftEventIds,
+    joinEvent,
+    leavingEventId,
+    leaveEvent,
+  } = useJoinEvent();
+
+  useEffect(() => {
+    if (!visible) return;
+    let active = true;
+    const isPullToRefresh = refreshRequestedRef.current;
+    refreshRequestedRef.current = false;
+    if (!isPullToRefresh) {
+      setIsLoadingEvents(true);
+      setEvents([]);
+      setExpandedEventId(null);
+      setParticipantListEventId(null);
+    }
+    const windowStart = dayjs(selectedDate).startOf("day").toISOString();
+    const windowEnd = dayjs(selectedDate)
+      .add(1, "day")
+      .startOf("day")
+      .toISOString();
+
+    if (__DEV__) {
+      const offsetMinutes = -new Date().getTimezoneOffset();
+      const sign = offsetMinutes >= 0 ? "+" : "-";
+      const absoluteOffset = Math.abs(offsetMinutes);
+      const offsetHours = String(Math.floor(absoluteOffset / 60)).padStart(
+        2,
+        "0",
+      );
+      const offsetRemainder = String(absoluteOffset % 60).padStart(2, "0");
+      console.info(
+        `[DEV][Events] device UTC${sign}${offsetHours}:${offsetRemainder}; query [${windowStart}, ${windowEnd})`,
+      );
+    }
+
+    void Promise.all([
+      eventsApi.listJoined({
+        start: windowStart,
+        end: windowEnd,
+        sort: "oldest",
+      }),
+      listAllPublicEvents(windowStart, windowEnd),
+      minimumLoadingDelay(),
+    ])
+      .then(([joined, publicEvents]) => {
+        if (!active) return;
+        if (
+          !Array.isArray(joined) ||
+          !Array.isArray(publicEvents) ||
+          joined.some((event) => !isEventResource(event)) ||
+          publicEvents.some((event) => !isEventResource(event))
+        ) {
+          setEvents(fallbackEvents);
+          return;
+        }
+        const joinedIds = new Set(joined.map((event) => event.event_uid));
+        const byId = new Map<string, ScheduleEvent>();
+        for (const event of publicEvents) {
+          byId.set(
+            event.event_uid,
+            toScheduleEvent(event, joinedIds.has(event.event_uid)),
+          );
+        }
+        for (const event of joined) {
+          byId.set(event.event_uid, toScheduleEvent(event, true));
+        }
+        setEvents(Array.from(byId.values()));
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        if (shouldUseFallback(error)) {
+          setEvents(fallbackEvents);
+        } else {
+          console.warn("[EventSchedulePanel] load failed", error);
+          setEvents([]);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setIsLoadingEvents(false);
+          setIsRefreshingEvents(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [refreshToken, selectedDate, visible]);
 
   const groupedEvents = useMemo(() => {
-    const eventsOfSelectedDate = mockEvents
+    const eventsOfSelectedDate = events
       .filter((event) => event.date === selectedDate)
       // 報名成功後把 isJoinedByMe 疊回去，那一場就會從 "Join New Events" 移到 "Your Events"。
       // 之後接後端時，這層 overlay 換成 store / refetch 即可，下面的分組邏輯不用動。
-      .map((event) =>
-        joinedEventIds.has(event.id) ? { ...event, isJoinedByMe: true } : event,
-      );
+      .map((event) => {
+        if (leftEventIds.has(event.id)) {
+          return { ...event, isJoinedByMe: false };
+        }
+        return joinedEventIds.has(event.id)
+          ? { ...event, isJoinedByMe: true }
+          : event;
+      });
 
     const yourEvents = sortEventsByTime(
       eventsOfSelectedDate.filter((event) => event.isJoinedByMe),
@@ -248,7 +436,7 @@ export default function EventSchedulePanel({
 
     const yourEventIds = new Set(yourEvents.map((event) => event.id));
 
-    const joinEvents = sortEventsByTime(
+    const joinEvents = sortJoinableEvents(
       eventsOfSelectedDate.filter((event) => {
         return !event.isJoinedByMe && !yourEventIds.has(event.id);
       }),
@@ -258,7 +446,7 @@ export default function EventSchedulePanel({
       yourEvents,
       joinEvents,
     };
-  }, [joinedEventIds, selectedDate]);
+  }, [events, joinedEventIds, leftEventIds, selectedDate]);
 
   const handleToggleEvent = (eventId: string) => {
     setExpandedEventId((currentEventId) => {
@@ -280,6 +468,31 @@ export default function EventSchedulePanel({
 
     if (expandedEventId !== eventId) {
       return;
+    }
+
+    const event = events.find((item) => item.id === eventId);
+    if (event && event.participants.length === 0 && event.participantCount) {
+      void eventsApi
+        .listParticipants(eventId, { sort: "oldest", limit: 100, offset: 0 })
+        .then((page) => {
+          setEvents((current) =>
+            current.map((item) =>
+              item.id === eventId
+                ? {
+                    ...item,
+                    participants: page.participants.map((participant) => ({
+                      id: participant.user_uid,
+                      name: participant.profile.user_id,
+                      countryCode: participant.profile.country,
+                    })),
+                  }
+                : item,
+            ),
+          );
+        })
+        .catch((error: unknown) =>
+          console.warn("[EventSchedulePanel] participants failed", error),
+        );
     }
 
     setParticipantListEventId((currentEventId) => {
@@ -308,31 +521,57 @@ export default function EventSchedulePanel({
         style={styles.scrollArea}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-        bounces={false}
-        alwaysBounceVertical={false}
+        alwaysBounceVertical
         overScrollMode="never"
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshingEvents}
+            onRefresh={() => {
+              refreshRequestedRef.current = true;
+              setIsRefreshingEvents(true);
+              setRefreshToken((token) => token + 1);
+            }}
+            tintColor={colors.brand}
+            colors={[colors.brand]}
+          />
+        }
       >
-        <EventSectionBlock
-          title="Your Events"
-          events={groupedEvents.yourEvents}
-          expandedEventId={expandedEventId}
-          participantListEventId={participantListEventId}
-          joiningEventId={joiningEventId}
-          onToggleEvent={handleToggleEvent}
-          onToggleParticipants={handleToggleParticipants}
-          onJoinEvent={joinEvent}
-        />
+        {isLoadingEvents ? (
+          <View style={styles.eventsLoading}>
+            <ActivityIndicator color={colors.brand} />
+            <Text style={styles.eventsLoadingText}>Loading events…</Text>
+          </View>
+        ) : (
+          <>
+            <EventSectionBlock
+              title="Your Events"
+              events={groupedEvents.yourEvents}
+              expandedEventId={expandedEventId}
+              participantListEventId={participantListEventId}
+              joiningEventId={joiningEventId}
+              leavingEventId={leavingEventId}
+              currentUserUid={currentUserUid}
+              onToggleEvent={handleToggleEvent}
+              onToggleParticipants={handleToggleParticipants}
+              onJoinEvent={joinEvent}
+              onLeaveEvent={leaveEvent}
+            />
 
-        <EventSectionBlock
-          title="Join New Events"
-          events={groupedEvents.joinEvents}
-          expandedEventId={expandedEventId}
-          participantListEventId={participantListEventId}
-          joiningEventId={joiningEventId}
-          onToggleEvent={handleToggleEvent}
-          onToggleParticipants={handleToggleParticipants}
-          onJoinEvent={joinEvent}
-        />
+            <EventSectionBlock
+              title="Join New Events"
+              events={groupedEvents.joinEvents}
+              expandedEventId={expandedEventId}
+              participantListEventId={participantListEventId}
+              joiningEventId={joiningEventId}
+              leavingEventId={leavingEventId}
+              currentUserUid={currentUserUid}
+              onToggleEvent={handleToggleEvent}
+              onToggleParticipants={handleToggleParticipants}
+              onJoinEvent={joinEvent}
+              onLeaveEvent={leaveEvent}
+            />
+          </>
+        )}
       </ScrollView>
     </View>
   );
@@ -340,17 +579,20 @@ export default function EventSchedulePanel({
 
 type EventSectionBlockProps = {
   title: string;
-  events: MockEvent[];
+  events: ScheduleEvent[];
   expandedEventId: string | null;
   participantListEventId: string | null;
   /** 正在報名中的活動 id */
   joiningEventId: string | null;
+  leavingEventId: string | null;
+  currentUserUid?: string;
   onToggleEvent: (eventId: string) => void;
   onToggleParticipants: (
     pressEvent: GestureResponderEvent,
     eventId: string,
   ) => void;
-  onJoinEvent: (event: MockEvent) => void;
+  onJoinEvent: (event: ScheduleEvent) => void;
+  onLeaveEvent: (event: ScheduleEvent) => void;
 };
 
 function EventSectionBlock({
@@ -359,9 +601,12 @@ function EventSectionBlock({
   expandedEventId,
   participantListEventId,
   joiningEventId,
+  leavingEventId,
+  currentUserUid,
   onToggleEvent,
   onToggleParticipants,
   onJoinEvent,
+  onLeaveEvent,
 }: EventSectionBlockProps) {
   return (
     <View style={styles.sectionBlock}>
@@ -373,7 +618,7 @@ function EventSectionBlock({
         </Text>
       ) : (
         <View style={styles.eventList}>
-          {events.map((event) => {
+          {events.map((event, index) => {
             const isExpanded = expandedEventId === event.id;
             const isParticipantListVisible =
               participantListEventId === event.id;
@@ -386,9 +631,18 @@ function EventSectionBlock({
                 isParticipantListVisible={isParticipantListVisible}
                 isJoining={joiningEventId === event.id}
                 isAnyJoinInFlight={joiningEventId !== null}
+                isLeaving={leavingEventId === event.id}
+                isAnyLeaveInFlight={leavingEventId !== null}
+                canLeave={
+                  event.isJoinedByMe &&
+                  !isEventExpired(event) &&
+                  event.creatorUid !== currentUserUid
+                }
+                showDivider={index < events.length - 1}
                 onToggleEvent={onToggleEvent}
                 onToggleParticipants={onToggleParticipants}
                 onJoinEvent={onJoinEvent}
+                onLeaveEvent={onLeaveEvent}
               />
             );
           })}
@@ -399,19 +653,24 @@ function EventSectionBlock({
 }
 
 type EventRowProps = {
-  event: MockEvent;
+  event: ScheduleEvent;
   isExpanded: boolean;
   isParticipantListVisible: boolean;
   /** 這一場正在報名中 */
   isJoining: boolean;
   /** 任何一場正在報名中：其他場的 Join 一併鎖住，避免同時送出兩筆 */
   isAnyJoinInFlight: boolean;
+  isLeaving: boolean;
+  isAnyLeaveInFlight: boolean;
+  canLeave: boolean;
+  showDivider: boolean;
   onToggleEvent: (eventId: string) => void;
   onToggleParticipants: (
     pressEvent: GestureResponderEvent,
     eventId: string,
   ) => void;
-  onJoinEvent: (event: MockEvent) => void;
+  onJoinEvent: (event: ScheduleEvent) => void;
+  onLeaveEvent: (event: ScheduleEvent) => void;
 };
 
 function EventRow({
@@ -420,11 +679,18 @@ function EventRow({
   isParticipantListVisible,
   isJoining,
   isAnyJoinInFlight,
+  isLeaving,
+  isAnyLeaveInFlight,
+  canLeave,
+  showDivider,
   onToggleEvent,
   onToggleParticipants,
   onJoinEvent,
+  onLeaveEvent,
 }: EventRowProps) {
-  const participantText = `${event.participants.length}/${event.maxParticipants}`;
+  const participantText = `${event.participantCount ?? event.participants.length}/${event.maxParticipants}`;
+  const isExpired = isEventExpired(event);
+  const displayColor = isExpired ? "#B8B8B8" : event.color;
   const joinDisabledReason = getJoinDisabledReason(event);
   const isJoinDisabled = !canJoinEvent(event) || isAnyJoinInFlight;
 
@@ -434,7 +700,9 @@ function EventRow({
       style={styles.eventSlotRow}
       onPress={() => onToggleEvent(event.id)}
     >
-      <Text style={styles.timeText}>{event.startTime}</Text>
+      <Text style={[styles.timeText, isExpired && styles.expiredTimeText]}>
+        {event.startTime}
+      </Text>
 
       <View style={styles.eventArea}>
         <View style={styles.eventRow}>
@@ -442,7 +710,7 @@ function EventRow({
             style={[
               styles.eventColorBar,
               {
-                backgroundColor: event.color,
+                backgroundColor: displayColor,
               },
             ]}
           />
@@ -451,7 +719,7 @@ function EventRow({
             style={[
               styles.eventTitle,
               {
-                color: event.color,
+                color: displayColor,
               },
             ]}
             numberOfLines={isExpanded ? 2 : 1}
@@ -463,7 +731,7 @@ function EventRow({
             style={[
               styles.participantText,
               {
-                color: event.color,
+                color: displayColor,
               },
             ]}
           >
@@ -480,7 +748,7 @@ function EventRow({
               style={[
                 styles.personIcon,
                 {
-                  color: event.color,
+                  color: displayColor,
                 },
               ]}
             >
@@ -536,7 +804,10 @@ function EventRow({
                   ]}
                   onPress={() => onJoinEvent(event)}
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: isJoinDisabled, busy: isJoining }}
+                  accessibilityState={{
+                    disabled: isJoinDisabled,
+                    busy: isJoining,
+                  }}
                 >
                   {isJoining ? (
                     <ActivityIndicator color="#FFFFFF" size="small" />
@@ -549,7 +820,39 @@ function EventRow({
               </>
             )}
 
-            <View style={styles.expandedDivider} />
+            {canLeave && (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                disabled={isAnyLeaveInFlight}
+                style={[
+                  styles.leaveButton,
+                  isAnyLeaveInFlight && styles.joinButtonDisabled,
+                ]}
+                onPress={() => onLeaveEvent(event)}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel participation"
+                accessibilityState={{
+                  disabled: isAnyLeaveInFlight,
+                  busy: isLeaving,
+                }}
+              >
+                {isLeaving ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={styles.joinButtonText}>
+                    Cancel participation
+                  </Text>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {showDivider && (
+          <View style={styles.eventDivider} pointerEvents="none">
+            {Array.from({ length: 32 }, (_, index) => (
+              <View key={index} style={styles.eventDividerDash} />
+            ))}
           </View>
         )}
       </View>
@@ -600,6 +903,16 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 100,
   },
+  eventsLoading: {
+    minHeight: 180,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
+  eventsLoadingText: {
+    fontSize: 13,
+    color: "#888888",
+  },
   sectionBlock: {
     marginBottom: 28,
   },
@@ -623,6 +936,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#6F6F6F",
   },
+  expiredTimeText: {
+    color: "#B8B8B8",
+  },
   eventArea: {
     flex: 1,
   },
@@ -630,9 +946,6 @@ const styles = StyleSheet.create({
     minHeight: 24,
     flexDirection: "row",
     alignItems: "center",
-    borderBottomWidth: 1,
-    borderStyle: "dashed",
-    borderBottomColor: "#777777",
   },
   eventColorBar: {
     width: 6,
@@ -662,6 +975,7 @@ const styles = StyleSheet.create({
   },
   expandedContent: {
     paddingTop: 10,
+    marginLeft: 14,
   },
   participantList: {
     marginBottom: 12,
@@ -707,6 +1021,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  leaveButton: {
+    height: 40,
+    marginTop: 16,
+    borderRadius: 10,
+    backgroundColor: "#666666",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   joinDisabledReason: {
     marginTop: 12,
     fontSize: 12,
@@ -721,11 +1043,18 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#FFFFFF",
   },
-  expandedDivider: {
-    marginTop: 16,
-    borderBottomWidth: 1,
-    borderStyle: "dashed",
-    borderBottomColor: "#999999",
+  eventDivider: {
+    marginTop: 10,
+    marginLeft: 14,
+    height: 1,
+    flexDirection: "row",
+    gap: 3,
+    overflow: "hidden",
+  },
+  eventDividerDash: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#B8B8B8",
   },
   emptyText: {
     fontSize: 12,

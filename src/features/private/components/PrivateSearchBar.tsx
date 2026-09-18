@@ -8,8 +8,7 @@ type Props = {
 };
 
 /**
- * 搜尋欄。放在 FlashList 的 ListHeaderComponent，會跟著列表內容一起上下拖動，
- * 不像 PrivateListHeader（Private 標題 + 加好友）固定在最上面。
+ * 固定在 Private Header 下方，不屬於 FlashList 的可刷新內容。
  */
 export default function PrivateSearchBar({
   searchQuery,

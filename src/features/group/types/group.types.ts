@@ -1,5 +1,44 @@
+import type { UserAvatar, UserProfile } from "@/src/features/profile/types";
+
 /** 群組公開性，對應列表上方 Public / Private 兩個切換 tab */
 export type GroupVisibility = "public" | "private";
+
+export type GroupResource = {
+  group_uid: string;
+  group_id: string;
+  visibility: GroupVisibility;
+  owner_uid: string;
+  member_count: number;
+  member_limit: number;
+  icon: UserAvatar | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type GroupInvitation = {
+  group_uid: string;
+  inviter_uid: string;
+  created_at: string;
+  profile: UserProfile;
+};
+
+export type GroupMember = {
+  user_uid: string;
+  joined_at: string;
+  profile: UserProfile;
+};
+
+export type CreateGroupRequest = {
+  group_id: string;
+  member_limit: number;
+  visibility: GroupVisibility;
+};
+
+export type UpdateGroupRequest = {
+  icon?: string | null;
+  member_limit?: number | null;
+  visibility?: GroupVisibility | null;
+};
 
 /**
  * 群組的下一場活動（列表 row 下方那條灰色活動列）。
@@ -41,22 +80,10 @@ export type GroupSummary = {
   upcomingEvent?: GroupUpcomingEvent;
 };
 
-/** 「Suggested for you」水平列表的推薦群組卡片 */
 export type SuggestedGroup = {
   id: string;
   name: string;
   coverUri: string;
-};
-
-/**
- * 推薦群組分批載入一頁的結果。
- * 推薦是「演算法產生、沒有明確總數」的清單，所以走 cursor 分頁而不是一次全拿：
- * 使用者往右滑到底就補下一批，後端隨時可以決定不再給（nextCursor: null）。
- */
-export type SuggestedGroupsPage = {
-  groups: SuggestedGroup[];
-  /** 下一頁要帶的 cursor；null 代表沒有更多推薦了 */
-  nextCursor: string | null;
 };
 
 /** 群組清單分批載入一頁的結果 */

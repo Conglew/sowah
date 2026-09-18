@@ -2,6 +2,7 @@ import { Image } from "expo-image";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import ChatStarIcon from "@/src/assets/icons/chat_star_icon.svg";
+import SowahAvatar from "@/src/assets/images/sowah-avar.svg";
 import { getCountryFlag } from "@/src/shared/utils/country-flag";
 import { colors } from "@/src/theme/colors";
 import type { PrivateConversation } from "../types/private.types";
@@ -20,21 +21,37 @@ type Props = {
 // 邀請提示的紅色驚嘆號，不是品牌色，故不放進 theme/colors
 const ALERT_BADGE_COLOR = "#FF8100";
 
-export default function PrivateConversationRow({ conversation, onPress }: Props) {
+export default function PrivateConversationRow({
+  conversation,
+  onPress,
+}: Props) {
   const lastMessage = getLastMessage(conversation);
   const isPending = hasPendingInvitation(conversation);
   const previewText = getPreviewText(lastMessage);
   const dateLabel = lastMessage ? formatListDate(lastMessage.createdAt) : "";
+  const unreadCount = conversation.unreadCount ?? 0;
 
   return (
     <TouchableOpacity activeOpacity={0.7} style={styles.row} onPress={onPress}>
       <View style={styles.avatarWrap}>
-        <Image
-          source={{ uri: conversation.avatarUri }}
-          style={[styles.avatar, isPending && styles.avatarPending]}
-          contentFit="cover"
-          cachePolicy="memory-disk"
-        />
+        {conversation.avatarUri ? (
+          <Image
+            source={{ uri: conversation.avatarUri }}
+            style={[styles.avatar, isPending && styles.avatarPending]}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+          />
+        ) : (
+          <View
+            style={[
+              styles.avatar,
+              styles.avatarFallback,
+              isPending && styles.avatarPending,
+            ]}
+          >
+            <SowahAvatar width={44} height={44} />
+          </View>
+        )}
 
         {conversation.isFriend && (
           <View style={styles.friendBadge}>
@@ -48,11 +65,21 @@ export default function PrivateConversationRow({ conversation, onPress }: Props)
           <Text style={styles.username} numberOfLines={1}>
             {conversation.username}
           </Text>
-          <Text style={styles.flag}>{getCountryFlag(conversation.countryCode)}</Text>
+          <Text style={styles.flag}>
+            {getCountryFlag(conversation.countryCode)}
+          </Text>
         </View>
 
-        <Text style={styles.preview} numberOfLines={1} ellipsizeMode="tail">
-          {isPending ? "Invite you!!" : previewText}
+        <Text
+          style={[styles.preview, unreadCount > 0 && styles.unreadPreview]}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+        >
+          {isPending
+            ? "Invite you!!"
+            : unreadCount > 0
+              ? `${unreadCount} 則新訊息`
+              : previewText}
         </Text>
       </View>
 
@@ -68,11 +95,7 @@ export default function PrivateConversationRow({ conversation, onPress }: Props)
             </View>
           </View>
         ) : (
-          !!conversation.unreadCount && (
-            <View style={styles.unreadBadge}>
-              <Text style={styles.unreadBadgeText}>{conversation.unreadCount}</Text>
-            </View>
-          )
+          unreadCount > 0 && <View style={styles.unreadDot} />
         )}
 
         <Text style={styles.dateText}>{dateLabel}</Text>
@@ -106,6 +129,10 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: colors.brandStrong,
   },
+  avatarFallback: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
   friendBadge: {
     position: "absolute",
     bottom: -1,
@@ -133,6 +160,10 @@ const styles = StyleSheet.create({
     marginTop: 3,
     fontSize: 13,
     color: "#999999",
+  },
+  unreadPreview: {
+    fontWeight: "700",
+    color: "#222222",
   },
   inviteIndicator: {
     flexDirection: "row",
@@ -166,20 +197,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: "#AAAAAA",
   },
-  unreadBadge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    paddingHorizontal: 5,
-    borderWidth: 1,
-    borderColor: colors.brandStrong,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  unreadBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: colors.brandStrong,
+  unreadDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#4B72FF",
   },
 });
