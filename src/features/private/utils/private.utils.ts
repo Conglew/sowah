@@ -1,6 +1,9 @@
 import dayjs from "dayjs";
 
-import type { PrivateConversation, PrivateMessage } from "../types/private.types";
+import type {
+  PrivateConversation,
+  PrivateMessage,
+} from "../types/private.types";
 
 /** 對話中最後一則訊息；空對話回傳 undefined，畫面層需自行處理空狀態 */
 export function getLastMessage(
@@ -14,9 +17,15 @@ export function getLastMessage(
  * 這是列表顯示「Invite you!! + 橘框」與否的唯一依據，
  * 用當下的 messages 即時算出，不額外存 hasPendingInvitation 欄位，避免兩處資料兜不起來。
  */
-export function hasPendingInvitation(conversation: PrivateConversation): boolean {
-  return conversation.messages.some(
-    (message) => message.kind === "invitation" && !message.invitation?.response,
+export function hasPendingInvitation(
+  conversation: PrivateConversation,
+): boolean {
+  return (
+    conversation.friendRequest?.status === "pending" ||
+    conversation.messages.some(
+      (message) =>
+        message.kind === "invitation" && !message.invitation?.response,
+    )
   );
 }
 
@@ -61,8 +70,10 @@ export function sortConversationsByLastMessageDesc(
   conversations: PrivateConversation[],
 ): PrivateConversation[] {
   return [...conversations].sort((a, b) => {
-    const aLastMessageAt = getLastMessage(a)?.createdAt ?? "";
-    const bLastMessageAt = getLastMessage(b)?.createdAt ?? "";
+    const aLastMessageAt =
+      a.friendRequest?.createdAt ?? getLastMessage(a)?.createdAt ?? "";
+    const bLastMessageAt =
+      b.friendRequest?.createdAt ?? getLastMessage(b)?.createdAt ?? "";
     return bLastMessageAt.localeCompare(aLastMessageAt);
   });
 }

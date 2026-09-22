@@ -1,5 +1,6 @@
 import { apiClient } from "@/src/services/api/http-client";
 import { friendsApi } from "@/src/features/friends/api/friends.api";
+import { assertPaidMembership } from "@/src/features/membership/membership-access";
 import { usersApi } from "@/src/features/profile/api/users.api";
 import type { CountryCode } from "@/src/shared/utils/country-flag";
 import {
@@ -33,6 +34,28 @@ function toConversation(profile: {
     avatarUri: profile.avatar?.download_url ?? "",
     isFriend: true,
     messages: [],
+  };
+}
+
+function friendRequestToConversation(request: {
+  user_uid: string;
+  created_at: string;
+  profile: {
+    user_uid: string;
+    user_id: string;
+    country: string;
+    avatar: { download_url: string } | null;
+  };
+}): PrivateConversation {
+  return {
+    ...toConversation(request.profile),
+    id: request.user_uid,
+    isFriend: false,
+    friendRequest: {
+      direction: "incoming",
+      status: "pending",
+      createdAt: request.created_at,
+    },
   };
 }
 
@@ -95,23 +118,46 @@ export const privateApi = {
     const { cursor, pageSize, searchQuery } = params;
 
     const offset = cursor ? Number(cursor) : 0;
-    const page = await friendsApi.list({
-      sort: "newest",
-      limit: pageSize,
-      offset: Number.isFinite(offset) ? offset : 0,
-    });
+    const [page, incomingPage] = await Promise.all([
+      friendsApi.list({
+        sort: "newest",
+        limit: pageSize,
+        offset: Number.isFinite(offset) ? offset : 0,
+      }),
+      cursor === null
+        ? friendsApi.listIncoming({ sort: "newest", limit: 50, offset: 0 })
+        : Promise.resolve(null),
+    ]);
     const normalizedQuery = searchQuery.trim().toLowerCase();
-    const conversations = page.friends
+    const friendConversations = page.friends
       .map((friend) => toConversation(friend.profile))
       .filter(
         (conversation) =>
           !normalizedQuery ||
           conversation.username.toLowerCase().includes(normalizedQuery),
       );
+    const incomingConversations = (incomingPage?.requests ?? [])
+      .map(friendRequestToConversation)
+      .filter(
+        (conversation) =>
+          !normalizedQuery ||
+          conversation.username.toLowerCase().includes(normalizedQuery),
+      );
+    const byId = new Map<string, PrivateConversation>();
+    for (const conversation of [
+      ...incomingConversations,
+      ...friendConversations,
+    ]) {
+      const existing = byId.get(conversation.id);
+      byId.set(
+        conversation.id,
+        existing ? { ...conversation, ...existing } : conversation,
+      );
+    }
     const nextOffset = page.offset + page.friends.length;
 
     return {
-      conversations: await withLatestMessages(conversations),
+      conversations: await withLatestMessages(Array.from(byId.values())),
       nextCursor: nextOffset < page.total ? String(nextOffset) : null,
     };
   },
@@ -180,6 +226,7 @@ export const privateApi = {
     conversationId: string,
     text: string,
   ): Promise<PrivateMessage> {
+    assertPaidMembership();
     const trimmedText = text.trim();
 
     if (USE_CHAT) {

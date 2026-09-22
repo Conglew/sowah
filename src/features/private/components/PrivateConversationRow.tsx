@@ -28,7 +28,9 @@ export default function PrivateConversationRow({
   const lastMessage = getLastMessage(conversation);
   const isPending = hasPendingInvitation(conversation);
   const previewText = getPreviewText(lastMessage);
-  const dateLabel = lastMessage ? formatListDate(lastMessage.createdAt) : "";
+  const dateSource =
+    conversation.friendRequest?.createdAt ?? lastMessage?.createdAt;
+  const dateLabel = dateSource ? formatListDate(dateSource) : "";
   const unreadCount = conversation.unreadCount ?? 0;
 
   return (

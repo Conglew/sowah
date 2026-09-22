@@ -6,6 +6,10 @@
 export const ENV = {
   apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? "",
 
+  // 後端會員欄位完成前，僅供本機開發切換 free / paid。
+  // 正式環境不要以這個公開變數作為唯一授權依據，後端仍須驗證會員資格。
+  membershipTier: process.env.EXPO_PUBLIC_MEMBERSHIP_TIER ?? "",
+
   firebase: {
     apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY ?? "",
     authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN ?? "",

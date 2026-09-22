@@ -47,6 +47,7 @@ type PrivateStoreState = {
 
   /** 清空某個對話的未讀數字 */
   clearUnreadCount: (conversationId: string) => void;
+  resolveFriendRequest: (conversationId: string, accepted: boolean) => void;
 };
 
 /**
@@ -240,6 +241,23 @@ export const usePrivateStore = create<PrivateStoreState>((set) => ({
         conversationsById: {
           ...state.conversationsById,
           [conversationId]: { ...conversation, unreadCount: 0 },
+        },
+      };
+    });
+  },
+
+  resolveFriendRequest: (conversationId, accepted) => {
+    set((state) => {
+      const conversation = state.conversationsById[conversationId];
+      if (!conversation) return state;
+      return {
+        conversationsById: {
+          ...state.conversationsById,
+          [conversationId]: {
+            ...conversation,
+            friendRequest: undefined,
+            isFriend: accepted,
+          },
         },
       };
     });

@@ -24,6 +24,7 @@ export function setAccessToken(token: string | null) {
 // 以下兩個 injection point 由 auth.store 注入，避免 http-client 反向 import store（循環依賴）
 type TokenRefresher = () => Promise<string>;
 let tokenRefresher: TokenRefresher | null = null;
+let refreshPromise: Promise<string> | null = null;
 
 export function setTokenRefresher(fn: TokenRefresher | null) {
   tokenRefresher = fn;
@@ -66,7 +67,14 @@ apiClient.interceptors.response.use(
       original._retry = true;
 
       try {
-        const newAccessToken = await tokenRefresher();
+        // 好友頁等畫面會平行發出多個請求。access token 過期時，只允許一次
+        // refresh；其他 401 共用同一個結果，避免 refresh-token rotation 互撞。
+        if (!refreshPromise) {
+          refreshPromise = tokenRefresher().finally(() => {
+            refreshPromise = null;
+          });
+        }
+        const newAccessToken = await refreshPromise;
         original.headers.set("Authorization", `Bearer ${newAccessToken}`);
         return apiClient(original);
       } catch (refreshError) {

@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -16,19 +17,29 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import dayjs from "dayjs";
 
 import { colors } from "@/src/theme/colors";
+import { hasPaidMembership } from "@/src/features/membership/membership-access";
+import { useAuthStore } from "@/src/stores/auth.store";
 import ChatHeader from "../components/ChatHeader";
 import ChatInputBar from "../components/ChatInputBar";
 import InvitationCard from "../components/InvitationCard";
+import FriendRequestCard from "../components/FriendRequestCard";
 import MessageBubble from "../components/MessageBubble";
 import { usePrivateConversation } from "../hooks/usePrivateConversation";
-import type { InvitationResponse, PrivateMessage } from "../types/private.types";
-import { formatDateSeparatorLabel, formatMessageTime } from "../utils/private.utils";
+import type {
+  InvitationResponse,
+  PrivateMessage,
+} from "../types/private.types";
+import {
+  formatDateSeparatorLabel,
+  formatMessageTime,
+} from "../utils/private.utils";
 
 // 捲到距離頂端這麼近（px）就觸發載入更早的訊息
 const LOAD_MORE_MESSAGES_SCROLL_THRESHOLD = 60;
 
 export default function PrivateChatPage() {
   const router = useRouter();
+  const authUser = useAuthStore((state) => state.user);
   // expo-router 的 useNavigation() 預設回傳的型別沒有帶到 native-stack 專屬的事件（例如 transitionEnd），
   // 這裡的 Stack 底層就是 @react-navigation/native-stack（見 app/_layout.tsx），所以直接標注成
   // NativeStackNavigationProp 來拿到正確的事件型別，不是隨便斷言繞過型別檢查。
@@ -47,9 +58,11 @@ export default function PrivateChatPage() {
     sendMessage,
     respondToInvitation,
     markRead,
+    respondToFriendRequest,
   } = usePrivateConversation(conversationId);
 
   const [draft, setDraft] = useState("");
+  const [isRespondingToFriend, setIsRespondingToFriend] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   // 進入聊天室即視為已讀，清空該對話的未讀數字
@@ -165,12 +178,29 @@ export default function PrivateChatPage() {
     const text = draft.trim();
     if (!text) return;
 
+    if (!hasPaidMembership(authUser)) {
+      Alert.alert("付費會員限定", "升級為付費會員後，才可以傳送私人訊息。");
+      return;
+    }
+
     setDraft("");
     void sendMessage(text);
   };
 
   const handleRespond = (messageId: string, response: InvitationResponse) => {
     void respondToInvitation(messageId, response);
+  };
+
+  const handleFriendRequest = async (accepted: boolean) => {
+    if (isRespondingToFriend) return;
+    setIsRespondingToFriend(true);
+    try {
+      await respondToFriendRequest(accepted);
+    } catch (error) {
+      console.warn("[PrivateChat] friend request response failed", error);
+    } finally {
+      setIsRespondingToFriend(false);
+    }
   };
 
   const handleScroll = (offsetY: number) => {
@@ -196,7 +226,12 @@ export default function PrivateChatPage() {
   if (!conversation) {
     return (
       <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
-        <ChatHeader username="" avatarUri="" countryCode="" onBack={handleBack} />
+        <ChatHeader
+          username=""
+          avatarUri=""
+          countryCode=""
+          onBack={handleBack}
+        />
         <View style={styles.center}>
           <Text style={styles.emptyText}>找不到這個對話</Text>
         </View>
@@ -241,7 +276,16 @@ export default function PrivateChatPage() {
             </View>
           )}
 
-          {conversation.messages.length === 0 ? (
+          {conversation.friendRequest?.status === "pending" && (
+            <FriendRequestCard
+              username={conversation.username}
+              isResponding={isRespondingToFriend}
+              onAccept={() => void handleFriendRequest(true)}
+              onDecline={() => void handleFriendRequest(false)}
+            />
+          )}
+
+          {conversation.messages.length === 0 && !conversation.friendRequest ? (
             <View style={styles.center}>
               <Text style={styles.emptyText}>尚無訊息，打個招呼吧！</Text>
             </View>
@@ -250,7 +294,11 @@ export default function PrivateChatPage() {
           )}
         </ScrollView>
 
-        <ChatInputBar value={draft} onChangeText={setDraft} onSend={handleSend} />
+        <ChatInputBar
+          value={draft}
+          onChangeText={setDraft}
+          onSend={handleSend}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

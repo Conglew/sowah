@@ -19,6 +19,9 @@ export type AuthTokens = {
 export type AuthUser = {
   user_uid: string;
   role: string;
+  /** 後端會員系統完成後由 /auth/whoami 與登入結果提供。 */
+  membership_tier?: "free" | "paid";
+  membership_expires_at?: string | null;
   oidc_provider: string | null;
   oidc_sub: string | null;
   created_at: string;

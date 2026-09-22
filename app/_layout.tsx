@@ -92,6 +92,10 @@ export default function RootLayout() {
               />
               <Stack.Screen name="friends" options={{ headerShown: false }} />
               <Stack.Screen
+                name="events/[eventUid]"
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
                 name="private-chat/[conversationId]"
                 options={{ headerShown: false }}
               />

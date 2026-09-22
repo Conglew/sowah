@@ -24,6 +24,8 @@ type UsePrivateConversationsResult = {
   hasMore: boolean;
   /** 接給 RefreshControl 的 onRefresh */
   refresh: () => Promise<void>;
+  /** Tab 再次 focus 時同步資料，不啟動 RefreshControl，避免 iOS 留下頂部 inset */
+  refreshSilently: () => Promise<void>;
   /** 接給 FlashList 的 onEndReached */
   loadMore: () => Promise<void>;
 };
@@ -39,7 +41,9 @@ export function usePrivateConversations(
   searchQuery: string,
 ): UsePrivateConversationsResult {
   const conversationsById = usePrivateStore((state) => state.conversationsById);
-  const upsertConversations = usePrivateStore((state) => state.upsertConversations);
+  const upsertConversations = usePrivateStore(
+    (state) => state.upsertConversations,
+  );
 
   const [listOrder, setListOrder] = useState<string[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -56,12 +60,12 @@ export function usePrivateConversations(
   const isFirstRunRef = useRef(true);
 
   const loadFirstPage = useCallback(
-    async (query: string, mode: "initial" | "refresh") => {
+    async (query: string, mode: "initial" | "refresh" | "silent") => {
       const requestToken = ++requestTokenRef.current;
 
       if (mode === "refresh") {
         setIsRefreshing(true);
-      } else {
+      } else if (mode === "initial") {
         setIsLoading(true);
       }
 
@@ -79,7 +83,9 @@ export function usePrivateConversations(
         // listOrder 語意上是「有序集合」：同一個 id 只能出現一次。
         // 重複的 id 會讓 FlashList 拿到重複 key，多出來的那筆佔版位但不會 mount，畫面破一塊空白。
         setListOrder(
-          Array.from(new Set(page.conversations.map((conversation) => conversation.id))),
+          Array.from(
+            new Set(page.conversations.map((conversation) => conversation.id)),
+          ),
         );
         setCursor(page.nextCursor);
         setHasMore(page.nextCursor !== null);
@@ -114,6 +120,10 @@ export function usePrivateConversations(
     await loadFirstPage(appliedSearchQueryRef.current, "refresh");
   }, [loadFirstPage]);
 
+  const refreshSilently = useCallback(async () => {
+    await loadFirstPage(appliedSearchQueryRef.current, "silent");
+  }, [loadFirstPage]);
+
   const loadMore = useCallback(async () => {
     if (!hasMore || isLoadingMore || isLoading || isRefreshing) return;
 
@@ -139,7 +149,9 @@ export function usePrivateConversations(
           .filter((id) => !seenIds.has(id));
 
         // 沒有新項目就回傳原陣列，避免製造新 reference 觸發不必要的 re-render
-        return appendedIds.length > 0 ? [...previousOrder, ...appendedIds] : previousOrder;
+        return appendedIds.length > 0
+          ? [...previousOrder, ...appendedIds]
+          : previousOrder;
       });
       setCursor(page.nextCursor);
       setHasMore(page.nextCursor !== null);
@@ -148,14 +160,24 @@ export function usePrivateConversations(
     } finally {
       setIsLoadingMore(false);
     }
-  }, [cursor, hasMore, isLoading, isLoadingMore, isRefreshing, upsertConversations]);
+  }, [
+    cursor,
+    hasMore,
+    isLoading,
+    isLoadingMore,
+    isRefreshing,
+    upsertConversations,
+  ]);
 
   // 依最後一則訊息時間新到舊排：收到新訊息時（全域 listener 已更新 store），
   // 那個對話會即時浮到最上面（live 重排），跟 mock API 後端的排序邏輯共用同一支 util。
   const conversations = sortConversationsByLastMessageDesc(
     listOrder
       .map((id) => conversationsById[id])
-      .filter((conversation): conversation is PrivateConversation => conversation != null),
+      .filter(
+        (conversation): conversation is PrivateConversation =>
+          conversation != null,
+      ),
   );
 
   return {
@@ -165,6 +187,7 @@ export function usePrivateConversations(
     isLoadingMore,
     hasMore,
     refresh,
+    refreshSilently,
     loadMore,
   };
 }

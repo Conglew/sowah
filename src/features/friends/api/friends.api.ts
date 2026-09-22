@@ -1,4 +1,5 @@
 import { apiClient } from "@/src/services/api/http-client";
+import { assertPaidMembership } from "@/src/features/membership/membership-access";
 import type {
   Friend,
   FriendListParams,
@@ -19,6 +20,7 @@ export const friendsApi = {
   },
 
   async sendRequest(to: string): Promise<FriendRequest> {
+    assertPaidMembership();
     const { data } = await apiClient.post<FriendRequest>("/friends/requests", {
       to,
     });

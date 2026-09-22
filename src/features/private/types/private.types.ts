@@ -38,6 +38,12 @@ export type PrivateConversation = {
   avatarUri: string;
   /** 頭像上的星形徽章（好友 / 常聯絡對象） */
   isFriend?: boolean;
+  /** 後端好友邀請；與聊天中的活動 invitation message 是不同資料。 */
+  friendRequest?: {
+    direction: "incoming";
+    status: "pending";
+    createdAt: string;
+  };
   /** 未讀訊息數；0 或 undefined 都不顯示徽章 */
   unreadCount?: number;
   /**

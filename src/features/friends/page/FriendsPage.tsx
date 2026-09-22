@@ -1,75 +1,109 @@
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import SowahAvatar from "@/src/assets/images/sowah-avar.svg";
+import { AppLogoHeader } from "@/src/components/layout/AppHeader";
+import { usersApi } from "@/src/features/profile/api/users.api";
+import { hasPaidMembership } from "@/src/features/membership/membership-access";
+import { useAuthStore } from "@/src/stores/auth.store";
+import type { UserProfile } from "@/src/features/profile/types";
 import { getCountryFlag } from "@/src/shared/utils/country-flag";
 import { colors } from "@/src/theme/colors";
 import { useFriends } from "../hooks/useFriends";
 import type { Friend, FriendRequest } from "../types/friends.types";
 
-function errorMessage(error: unknown): string {
-  if (typeof error === "object" && error !== null && "response" in error) {
-    const response = (
-      error as {
-        response?: {
-          data?: { detail?: string; message?: string };
-          status?: number;
-        };
-      }
-    ).response;
-    return (
-      response?.data?.detail ??
-      response?.data?.message ??
-      `請求失敗 (${response?.status})`
-    );
-  }
-  return error instanceof Error ? error.message : "請求失敗，請稍後再試";
+const SEARCH_DELAY_MS = 300;
+
+function getStatus(error: unknown): number | undefined {
+  return typeof error === "object" && error !== null && "response" in error
+    ? (error as { response?: { status?: number } }).response?.status
+    : undefined;
 }
 
 export default function FriendsPage() {
   const router = useRouter();
+  const authUser = useAuthStore((state) => state.user);
   const friendsState = useFriends();
-  const [userUid, setUserUid] = useState("");
-  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<UserProfile[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [invitingUid, setInvitingUid] = useState<string | null>(null);
 
-  const run = async (key: string, action: () => Promise<void>) => {
-    if (busyKey) return;
-    setBusyKey(key);
-    try {
-      await action();
-    } catch (error) {
-      Alert.alert("操作失敗", errorMessage(error));
-    } finally {
-      setBusyKey(null);
-    }
-  };
-
-  const handleSend = () => {
-    const target = userUid.trim();
+  useEffect(() => {
+    const target = query.trim();
     if (!target) {
-      Alert.alert("請輸入使用者 UID");
+      setResults([]);
+      setIsSearching(false);
       return;
     }
-    void run(`send:${target}`, async () => {
-      await friendsState.sendRequest(target);
-      setUserUid("");
-      Alert.alert("已送出好友邀請");
-    });
+    let active = true;
+    const timer = setTimeout(() => {
+      setIsSearching(true);
+      void usersApi
+        .search(target, { limit: 30, offset: 0 })
+        .then((page) => {
+          if (active) setResults(page.users);
+        })
+        .catch((error: unknown) => {
+          console.warn("[friends-search] failed", error);
+          if (active) setResults([]);
+        })
+        .finally(() => {
+          if (active) setIsSearching(false);
+        });
+    }, SEARCH_DELAY_MS);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [query]);
+
+  const invite = async (profile: UserProfile) => {
+    if (invitingUid) return;
+    if (!hasPaidMembership(authUser)) {
+      Alert.alert("付費會員限定", "升級為付費會員後，才可以發送好友邀請。");
+      return;
+    }
+    const duplicateMessage = getExistingRelationshipMessage(
+      profile.user_uid,
+      friendsState.friends,
+      friendsState.incoming,
+      friendsState.outgoing,
+    );
+    if (duplicateMessage) {
+      Alert.alert("無法重複邀請", duplicateMessage);
+      return;
+    }
+
+    setInvitingUid(profile.user_uid);
+    try {
+      await friendsState.sendRequest(profile.user_uid);
+      Alert.alert("已發送好友邀請", `已邀請 ${profile.user_id}`);
+    } catch (error) {
+      Alert.alert(
+        "無法發送邀請",
+        getStatus(error) === 409
+          ? "已發送過好友邀請或已添加過好友。"
+          : "請稍後再試一次。",
+      );
+    } finally {
+      setInvitingUid(null);
+    }
   };
 
   return (
@@ -78,132 +112,81 @@ export default function FriendsPage() {
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <View style={styles.header}>
+        <AppLogoHeader />
+        <View style={styles.toolbar}>
           <Pressable style={styles.backButton} onPress={() => router.back()}>
             <Text style={styles.backText}>‹</Text>
           </Pressable>
-          <Text style={styles.title}>Friends</Text>
-          <View style={styles.backButton} />
         </View>
+        <View style={styles.searchWrap}>
+          <Text style={styles.searchIcon}>⌕</Text>
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="搜尋公開 user_id"
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={styles.searchInput}
+          />
+        </View>
+        <View style={styles.separator} />
 
         <ScrollView
           style={styles.flex}
-          contentContainerStyle={styles.content}
+          contentContainerStyle={styles.results}
+          keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
-          alwaysBounceVertical
-          refreshControl={
-            <RefreshControl
-              refreshing={friendsState.isRefreshing}
-              onRefresh={friendsState.refresh}
-              tintColor={colors.brand}
-            />
-          }
         >
-          <Text style={styles.sectionTitle}>新增好友</Text>
-          <View style={styles.addRow}>
-            <TextInput
-              value={userUid}
-              onChangeText={setUserUid}
-              placeholder="輸入對方的 user_uid"
-              autoCapitalize="none"
-              autoCorrect={false}
-              style={styles.input}
-              returnKeyType="send"
-              onSubmitEditing={handleSend}
-            />
-            <ActionButton
-              label="送出"
-              loading={busyKey === `send:${userUid.trim()}`}
-              onPress={handleSend}
-            />
-          </View>
-
-          {friendsState.isLoading ? (
-            <ActivityIndicator style={styles.loader} color={colors.brand} />
-          ) : friendsState.error ? (
-            <View style={styles.messageBox}>
-              <Text style={styles.errorText}>
-                {errorMessage(friendsState.error)}
-              </Text>
-              <ActionButton
-                label="重試"
-                onPress={() => void friendsState.refresh()}
-              />
-            </View>
+          {isSearching ? (
+            <ActivityIndicator style={styles.loading} color={colors.brand} />
+          ) : query.trim() && results.length === 0 ? (
+            <Text style={styles.emptyText}>找不到符合的使用者</Text>
           ) : (
-            <>
-              <Section title={`收到的邀請 (${friendsState.incoming.length})`}>
-                {friendsState.incoming.map((request) => (
-                  <PersonRow key={request.user_uid} item={request}>
-                    <ActionButton
-                      label="接受"
-                      loading={busyKey === `accept:${request.user_uid}`}
-                      onPress={() =>
-                        void run(`accept:${request.user_uid}`, () =>
-                          friendsState.accept(request.user_uid),
-                        )
-                      }
+            results.map((profile) => {
+              const relationship = getExistingRelationshipMessage(
+                profile.user_uid,
+                friendsState.friends,
+                friendsState.incoming,
+                friendsState.outgoing,
+              );
+              return (
+                <View key={profile.user_uid} style={styles.userRow}>
+                  {profile.avatar?.download_url ? (
+                    <Image
+                      source={{ uri: profile.avatar.download_url }}
+                      style={styles.avatar}
+                      contentFit="cover"
                     />
-                    <ActionButton
-                      label="拒絕"
-                      secondary
-                      loading={busyKey === `decline:${request.user_uid}`}
-                      onPress={() =>
-                        void run(`decline:${request.user_uid}`, () =>
-                          friendsState.decline(request.user_uid),
-                        )
-                      }
-                    />
-                  </PersonRow>
-                ))}
-              </Section>
-
-              <Section title={`已送出的邀請 (${friendsState.outgoing.length})`}>
-                {friendsState.outgoing.map((request) => (
-                  <PersonRow key={request.user_uid} item={request}>
-                    <ActionButton
-                      label="取消"
-                      secondary
-                      loading={busyKey === `cancel:${request.user_uid}`}
-                      onPress={() =>
-                        void run(`cancel:${request.user_uid}`, () =>
-                          friendsState.cancel(request.user_uid),
-                        )
-                      }
-                    />
-                  </PersonRow>
-                ))}
-              </Section>
-
-              <Section title={`好友 (${friendsState.friends.length})`}>
-                {friendsState.friends.map((friend) => (
-                  <PersonRow key={friend.user_uid} item={friend}>
-                    <ActionButton
-                      label="刪除"
-                      secondary
-                      loading={busyKey === `unfriend:${friend.user_uid}`}
-                      onPress={() =>
-                        Alert.alert(
-                          "刪除好友",
-                          `確定要刪除 ${friend.profile.user_id}？`,
-                          [
-                            { text: "取消", style: "cancel" },
-                            {
-                              text: "刪除",
-                              style: "destructive",
-                              onPress: () =>
-                                void run(`unfriend:${friend.user_uid}`, () =>
-                                  friendsState.unfriend(friend.user_uid),
-                                ),
-                            },
-                          ],
-                        )
-                      }
-                    />
-                  </PersonRow>
-                ))}
-              </Section>
-            </>
+                  ) : (
+                    <View style={[styles.avatar, styles.avatarFallback]}>
+                      <SowahAvatar width={42} height={42} />
+                    </View>
+                  )}
+                  <Text style={styles.username} numberOfLines={1}>
+                    {profile.user_id} {getCountryFlag(profile.country)}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.addButton}
+                    disabled={Boolean(relationship) || invitingUid !== null}
+                    onPress={() => void invite(profile)}
+                    accessibilityLabel={`邀請 ${profile.user_id} 成為好友`}
+                  >
+                    {invitingUid === profile.user_uid ? (
+                      <ActivityIndicator size="small" color="#111111" />
+                    ) : (
+                      <Text
+                        style={[
+                          styles.addIcon,
+                          relationship && styles.addIconDisabled,
+                        ]}
+                      >
+                        {relationship ? "✓" : "+"}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              );
+            })
           )}
         </ScrollView>
       </KeyboardAvoidingView>
@@ -211,161 +194,93 @@ export default function FriendsPage() {
   );
 }
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  const hasItems = Array.isArray(children)
-    ? children.length > 0
-    : Boolean(children);
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {hasItems ? children : <Text style={styles.emptyText}>目前沒有資料</Text>}
-    </View>
-  );
-}
-
-function PersonRow({
-  item,
-  children,
-}: {
-  item: Friend | FriendRequest;
-  children: React.ReactNode;
-}) {
-  const avatarUri = item.profile.avatar?.download_url;
-  return (
-    <View style={styles.personRow}>
-      {avatarUri ? (
-        <Image
-          source={{ uri: avatarUri }}
-          style={styles.avatar}
-          contentFit="cover"
-        />
-      ) : (
-        <View style={[styles.avatar, styles.avatarFallback]}>
-          <SowahAvatar width={42} height={42} />
-        </View>
-      )}
-      <View style={styles.personInfo}>
-        <Text style={styles.personName} numberOfLines={1}>
-          {item.profile.user_id} {getCountryFlag(item.profile.country)}
-        </Text>
-        <Text style={styles.uid} numberOfLines={1}>
-          {item.user_uid}
-        </Text>
-      </View>
-      <View style={styles.actions}>{children}</View>
-    </View>
-  );
-}
-
-function ActionButton({
-  label,
-  onPress,
-  loading = false,
-  secondary = false,
-}: {
-  label: string;
-  onPress: () => void;
-  loading?: boolean;
-  secondary?: boolean;
-}) {
-  return (
-    <Pressable
-      disabled={loading}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.actionButton,
-        secondary && styles.actionButtonSecondary,
-        pressed && styles.pressed,
-      ]}
-    >
-      {loading ? (
-        <ActivityIndicator size="small" color={secondary ? "#555" : "#FFF"} />
-      ) : (
-        <Text
-          style={[styles.actionLabel, secondary && styles.actionLabelSecondary]}
-        >
-          {label}
-        </Text>
-      )}
-    </Pressable>
-  );
+function getExistingRelationshipMessage(
+  userUid: string,
+  friends: Friend[],
+  incoming: FriendRequest[],
+  outgoing: FriendRequest[],
+): string | null {
+  if (friends.some((friend) => friend.user_uid === userUid)) {
+    return "已添加過好友";
+  }
+  if (outgoing.some((request) => request.user_uid === userUid)) {
+    return "已發送過好友邀請";
+  }
+  if (incoming.some((request) => request.user_uid === userUid)) {
+    return "對方已邀請你，請到 Private 聊天室接受或拒絕。";
+  }
+  return null;
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#FFF" },
+  safeArea: { flex: 1, backgroundColor: "#FFFFFF" },
   flex: { flex: 1 },
-  header: {
-    height: 52,
-    paddingHorizontal: 20,
+  toolbar: { height: 38, paddingHorizontal: 28, justifyContent: "center" },
+  backButton: { width: 40, height: 38, justifyContent: "center" },
+  backText: { fontSize: 36, lineHeight: 38, color: "#555555" },
+  searchWrap: {
+    height: 34,
+    marginHorizontal: 38,
+    paddingHorizontal: 9,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: "#BEBEBE",
+    borderRadius: 7,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  backText: { fontSize: 36, lineHeight: 38, color: "#222" },
-  title: { fontSize: 20, fontWeight: "800", color: "#111" },
-  content: { paddingHorizontal: 24, paddingBottom: 60 },
-  section: { marginTop: 28 },
-  sectionTitle: {
-    marginBottom: 10,
-    fontSize: 17,
-    fontWeight: "800",
-    color: "#222",
-  },
-  addRow: { flexDirection: "row", gap: 8 },
-  input: {
+  searchIcon: { marginRight: 5, fontSize: 17, color: "#555555" },
+  searchInput: {
     flex: 1,
-    height: 42,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "#CFCFCF",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    color: "#222",
+    height: 32,
+    paddingVertical: 0,
+    fontSize: 14,
+    color: "#111111",
   },
-  loader: { marginTop: 48 },
-  messageBox: { marginTop: 36, alignItems: "center", gap: 12 },
-  errorText: { color: "#B42318", textAlign: "center" },
-  emptyText: { paddingVertical: 14, color: "#999" },
-  personRow: {
-    minHeight: 66,
+  separator: {
+    marginTop: 12,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: "#E6E6E6",
+  },
+  results: { paddingHorizontal: 20, paddingBottom: 30 },
+  loading: { marginTop: 40 },
+  emptyText: { marginTop: 40, textAlign: "center", color: "#999999" },
+  userRow: {
+    height: 62,
+    paddingHorizontal: 18,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "#E8E8E8",
   },
-  avatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: "#EEE" },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#EEEEEE",
+  },
   avatarFallback: {
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
   },
-  personInfo: { flex: 1, minWidth: 0 },
-  personName: { fontSize: 15, fontWeight: "700", color: "#222" },
-  uid: { marginTop: 3, fontSize: 10, color: "#999" },
-  actions: { flexDirection: "row", gap: 6 },
-  actionButton: {
-    minWidth: 58,
-    height: 34,
-    paddingHorizontal: 12,
-    borderRadius: 9,
+  username: { flex: 1, marginLeft: 12, fontSize: 15, color: "#222222" },
+  addButton: {
+    width: 40,
+    height: 40,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.brandStrong,
   },
-  actionButtonSecondary: { backgroundColor: "#EFEFEF" },
-  actionLabel: { color: "#FFF", fontSize: 13, fontWeight: "700" },
-  actionLabelSecondary: { color: "#555" },
-  pressed: { opacity: 0.7 },
+  addIcon: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    overflow: "hidden",
+    textAlign: "center",
+    lineHeight: 18,
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    backgroundColor: "#171717",
+  },
+  addIconDisabled: { backgroundColor: "#AFAFAF" },
 });

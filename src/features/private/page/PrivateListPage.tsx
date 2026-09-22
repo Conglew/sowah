@@ -30,6 +30,7 @@ export default function PrivateListPage() {
     isLoadingMore,
     hasMore,
     refresh,
+    refreshSilently,
     loadMore,
   } = usePrivateConversations(searchQuery);
 
@@ -44,8 +45,8 @@ export default function PrivateListPage() {
         hasFocusedOnceRef.current = true;
         return;
       }
-      void refresh();
-    }, [refresh]),
+      void refreshSilently();
+    }, [refreshSilently]),
   );
 
   // 搜尋字串一變動，結果一律從最上面開始看，不要停在舊的捲動位置。
@@ -86,6 +87,9 @@ export default function PrivateListPage() {
         contentContainerStyle={styles.listContent}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
+        // FlashList v2 預設會維持可見項目的錨點；第一頁由空清單切成一筆資料時，
+        // 可能把那筆的舊量測位置保留下來，造成搜尋框下方多一個空白版位。
+        maintainVisibleContentPosition={{ disabled: true }}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}

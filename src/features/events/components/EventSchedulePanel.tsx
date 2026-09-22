@@ -21,11 +21,17 @@ import {
 } from "../hooks/useEventParticipation";
 import { eventsApi } from "../api/events.api";
 import type { EventResource } from "../types/events.types";
+import EventShareSheet from "./EventShareSheet";
 
 dayjs.extend(customParseFormat);
 
 // 取消報名的警示色。不是品牌色，故不放進 theme/colors。
 const CANCEL_COLOR = "#D64545";
+const EVENT_AVAILABLE_COLOR = "#5C5C5C";
+const EVENT_UNAVAILABLE_COLOR = "#D2D2D2";
+const EVENT_JOINED_AVAILABLE_COLOR = colors.brandStrong;
+const EVENT_JOINED_FULL_COLOR = "#2FCB67";
+const EVENT_EXPIRED_COLOR = "#CFCFCF";
 
 const MIN_LOADING_MS = 250;
 
@@ -254,6 +260,18 @@ const canJoinEvent = (event: ScheduleEvent) => {
   return !event.isJoinedByMe && !isEventExpired(event) && !isEventFull(event);
 };
 
+/**
+ * 未參加清單只分可參加／不可參加兩色；參加後則依逾時、可用、額滿分三色。
+ */
+const getEventDisplayColor = (event: ScheduleEvent) => {
+  if (event.isJoinedByMe) {
+    if (isEventExpired(event)) return EVENT_EXPIRED_COLOR;
+    if (isEventFull(event)) return EVENT_JOINED_FULL_COLOR;
+    return EVENT_JOINED_AVAILABLE_COLOR;
+  }
+  return canJoinEvent(event) ? EVENT_AVAILABLE_COLOR : EVENT_UNAVAILABLE_COLOR;
+};
+
 const getJoinDisabledReason = (event: ScheduleEvent) => {
   if (event.isJoinedByMe) {
     return "Already joined";
@@ -356,6 +374,7 @@ export default function EventSchedulePanel({
   const [participantListEventId, setParticipantListEventId] = useState<
     string | null
   >(null);
+  const [shareEvent, setShareEvent] = useState<ScheduleEvent | null>(null);
   // 不要用 fallback 當初始值，否則真實 API 回來前會先閃一下假資料。
   const [events, setEvents] = useState<ScheduleEvent[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
@@ -606,6 +625,7 @@ export default function EventSchedulePanel({
               onToggleParticipants={handleToggleParticipants}
               onJoinEvent={joinEvent}
               onCancelEvent={cancelEvent}
+              onShareEvent={setShareEvent}
             />
 
             <EventSectionBlock
@@ -619,10 +639,13 @@ export default function EventSchedulePanel({
               onToggleParticipants={handleToggleParticipants}
               onJoinEvent={joinEvent}
               onCancelEvent={cancelEvent}
+              onShareEvent={setShareEvent}
             />
           </>
         )}
       </ScrollView>
+
+      <EventShareSheet event={shareEvent} onClose={() => setShareEvent(null)} />
     </View>
   );
 }
@@ -642,6 +665,7 @@ type EventSectionBlockProps = {
   ) => void;
   onJoinEvent: (event: ScheduleEvent) => void;
   onCancelEvent: (event: ScheduleEvent) => void;
+  onShareEvent: (event: ScheduleEvent) => void;
 };
 
 function EventSectionBlock({
@@ -655,6 +679,7 @@ function EventSectionBlock({
   onToggleParticipants,
   onJoinEvent,
   onCancelEvent,
+  onShareEvent,
 }: EventSectionBlockProps) {
   return (
     <View style={styles.sectionBlock}>
@@ -666,7 +691,7 @@ function EventSectionBlock({
         </Text>
       ) : (
         <View style={styles.eventList}>
-          {events.map((event, index) => {
+          {events.map((event) => {
             const isExpanded = expandedEventId === event.id;
             const isParticipantListVisible =
               participantListEventId === event.id;
@@ -683,11 +708,13 @@ function EventSectionBlock({
                 isAnyActionInFlight={pending !== null}
                 showCancel={shouldShowCancelButton(event, currentUserUid)}
                 canCancel={canCancelEvent(event, currentUserUid)}
-                showDivider={index < events.length - 1}
+                // 最後一筆也保留底部虛線；區段只有一場活動時仍能形成清楚收尾。
+                showDivider
                 onToggleEvent={onToggleEvent}
                 onToggleParticipants={onToggleParticipants}
                 onJoinEvent={onJoinEvent}
                 onCancelEvent={onCancelEvent}
+                onShareEvent={onShareEvent}
               />
             );
           })}
@@ -717,6 +744,7 @@ type EventRowProps = {
   ) => void;
   onJoinEvent: (event: ScheduleEvent) => void;
   onCancelEvent: (event: ScheduleEvent) => void;
+  onShareEvent: (event: ScheduleEvent) => void;
 };
 
 function EventRow({
@@ -732,10 +760,11 @@ function EventRow({
   onToggleParticipants,
   onJoinEvent,
   onCancelEvent,
+  onShareEvent,
 }: EventRowProps) {
   const participantText = `${event.participantCount ?? event.participants.length}/${event.maxParticipants}`;
   const isExpired = isEventExpired(event);
-  const displayColor = isExpired ? "#B8B8B8" : event.color;
+  const displayColor = getEventDisplayColor(event);
   const joinDisabledReason = getJoinDisabledReason(event);
   const isJoinDisabled = !canJoinEvent(event) || isAnyActionInFlight;
   const isCancelDisabled = !canCancel || isAnyActionInFlight;
@@ -842,28 +871,40 @@ function EventRow({
                   </Text>
                 )}
 
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  disabled={isJoinDisabled}
-                  style={[
-                    styles.joinButton,
-                    isJoinDisabled && styles.joinButtonDisabled,
-                  ]}
-                  onPress={() => onJoinEvent(event)}
-                  accessibilityRole="button"
-                  accessibilityState={{
-                    disabled: isJoinDisabled,
-                    busy: pendingAction === "join",
-                  }}
-                >
-                  {pendingAction === "join" ? (
-                    <ActivityIndicator color="#FFFFFF" size="small" />
-                  ) : (
-                    <Text style={styles.joinButtonText}>
-                      {canJoinEvent(event) ? "Join" : "Unavailable"}
-                    </Text>
-                  )}
-                </TouchableOpacity>
+                <View style={styles.joinActionRow}>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    disabled={isJoinDisabled}
+                    style={[
+                      styles.joinButton,
+                      isJoinDisabled && styles.joinButtonDisabled,
+                    ]}
+                    onPress={() => onJoinEvent(event)}
+                    accessibilityRole="button"
+                    accessibilityState={{
+                      disabled: isJoinDisabled,
+                      busy: pendingAction === "join",
+                    }}
+                  >
+                    {pendingAction === "join" ? (
+                      <ActivityIndicator color="#FFFFFF" size="small" />
+                    ) : (
+                      <Text style={styles.joinButtonText}>
+                        {canJoinEvent(event) ? "Join" : "Unavailable"}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    style={styles.shareButton}
+                    onPress={() => onShareEvent(event)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Share event"
+                  >
+                    <Text style={styles.shareButtonIcon}>➤</Text>
+                  </TouchableOpacity>
+                </View>
               </>
             )}
 
@@ -1074,12 +1115,29 @@ const styles = StyleSheet.create({
     color: "#A8A8A8",
   },
   joinButton: {
+    flex: 1,
     height: 40,
-    marginTop: 16,
     borderRadius: 10,
     backgroundColor: colors.brandStrong,
     alignItems: "center",
     justifyContent: "center",
+  },
+  joinActionRow: {
+    marginTop: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  shareButton: {
+    width: 42,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  shareButtonIcon: {
+    fontSize: 27,
+    color: "#111111",
+    transform: [{ rotate: "-12deg" }],
   },
   // 取消是破壞性操作，用外框 + 紅字而不是實心紅：實心紅在展開區塊裡太搶眼，
   // 會比它上面的主要資訊（討論指引）還先被看到。

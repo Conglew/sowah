@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { privateApi } from "../api/private.api";
+import { friendsApi } from "@/src/features/friends/api/friends.api";
 import { USE_CHAT } from "../private.config";
 import { usePrivateStore } from "../stores/private.store";
-import type { InvitationResponse, PrivateConversation } from "../types/private.types";
+import type {
+  InvitationResponse,
+  PrivateConversation,
+} from "../types/private.types";
 
 // 示範用故意設小一點：samijma_184 的 mock 資料有 5 則訊息，這樣往上滑至少能觸發一次「載入更早訊息」。
 const MESSAGES_PAGE_SIZE = 10;
@@ -24,6 +28,7 @@ type UsePrivateConversationResult = {
   ) => Promise<void>;
   /** 進聊天室時呼叫，清空未讀數字 */
   markRead: () => void;
+  respondToFriendRequest: (accepted: boolean) => Promise<void>;
 };
 
 /**
@@ -104,7 +109,8 @@ export function usePrivateConversation(
     if (!USE_CHAT || !conversationId) return;
 
     const existing =
-      usePrivateStore.getState().conversationsById[conversationId]?.messages ?? [];
+      usePrivateStore.getState().conversationsById[conversationId]?.messages ??
+      [];
     if (existing.length > 0) return;
 
     let cancelled = false;
@@ -117,7 +123,9 @@ export function usePrivateConversation(
           pageSize: MESSAGES_PAGE_SIZE,
         });
         if (cancelled) return;
-        usePrivateStore.getState().prependMessages(conversationId, page.messages);
+        usePrivateStore
+          .getState()
+          .prependMessages(conversationId, page.messages);
         setHasMoreMessages(page.nextCursor !== null);
       } catch (error) {
         console.warn("[usePrivateConversation] 初次載入 Chat 歷史失敗", error);
@@ -160,7 +168,10 @@ export function usePrivateConversation(
       if (!conversationId || !trimmedText) return;
 
       try {
-        const message = await privateApi.sendMessage(conversationId, trimmedText);
+        const message = await privateApi.sendMessage(
+          conversationId,
+          trimmedText,
+        );
         usePrivateStore.getState().appendMessage(conversationId, message);
       } catch (error) {
         console.warn("[usePrivateConversation] sendMessage failed", error);
@@ -184,10 +195,18 @@ export function usePrivateConversation(
         if (autoReply) {
           usePrivateStore
             .getState()
-            .applyInvitationResponse(conversationId, messageId, response, autoReply);
+            .applyInvitationResponse(
+              conversationId,
+              messageId,
+              response,
+              autoReply,
+            );
         }
       } catch (error) {
-        console.warn("[usePrivateConversation] respondToInvitation failed", error);
+        console.warn(
+          "[usePrivateConversation] respondToInvitation failed",
+          error,
+        );
       }
     },
     [conversationId],
@@ -204,6 +223,19 @@ export function usePrivateConversation(
     });
   }, [conversationId]);
 
+  const respondToFriendRequest = useCallback(
+    async (accepted: boolean) => {
+      if (!conversationId) return;
+      if (accepted) {
+        await friendsApi.accept(conversationId);
+      } else {
+        await friendsApi.decline(conversationId);
+      }
+      usePrivateStore.getState().resolveFriendRequest(conversationId, accepted);
+    },
+    [conversationId],
+  );
+
   return {
     conversation,
     isLoading,
@@ -213,5 +245,6 @@ export function usePrivateConversation(
     sendMessage,
     respondToInvitation,
     markRead,
+    respondToFriendRequest,
   };
 }
