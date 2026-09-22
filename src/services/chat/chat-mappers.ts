@@ -14,14 +14,19 @@ import { ChatType } from "./chat-sdk";
 
 /** Private conversation.id（對方 userID）-> Chat C2C 對話 ID */
 export function toConversationID(peerUserID: string): string {
-  return `C2C${peerUserID}`;
+  return `C2C${peerUserID.replaceAll("-", "")}`;
 }
 
 /** Chat C2C 對話 ID -> Private conversation.id（對方 userID） */
 export function toPeerUserID(conversationID: string): string {
-  return conversationID.startsWith("C2C")
+  const peerUserID = conversationID.startsWith("C2C")
     ? conversationID.slice("C2C".length)
     : conversationID;
+
+  // 後端 UserSig 將 UUID 編碼成 simple-hex；轉回 App API 使用的標準 UUID。
+  return /^[0-9a-f]{32}$/i.test(peerUserID)
+    ? `${peerUserID.slice(0, 8)}-${peerUserID.slice(8, 12)}-${peerUserID.slice(12, 16)}-${peerUserID.slice(16, 20)}-${peerUserID.slice(20)}`
+    : peerUserID;
 }
 
 /**

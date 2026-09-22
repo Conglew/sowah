@@ -15,6 +15,7 @@ import { useColorScheme } from "@/hooks/use-color-scheme";
 import AppLoadingScreen from "@/src/components/common/AppLoadingScreen";
 import FadeOverlay from "@/src/components/common/FadeOverlay";
 import ScreenBorderOverlay from "@/src/components/common/ScreenBorderOverlay";
+import { useMatchmakingController } from "@/src/features/matching/hooks/useMatchmakingController";
 import { usePrivateChatSync } from "@/src/features/private/hooks/usePrivateChatSync";
 import { useAppResumeLoading } from "@/src/hooks/useAppResumeLoading";
 import { useAuthStore } from "@/src/stores/auth.store";
@@ -42,6 +43,7 @@ export default function RootLayout() {
 
   // 全域 Chat 收訊同步：不管在哪一頁，收到新訊息都更新對話快取與未讀（USE_CHAT 時才生效）。
   usePrivateChatSync();
+  useMatchmakingController();
 
   const [minTimePassed, setMinTimePassed] = useState(false);
 
@@ -62,7 +64,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaProvider>
+      <SafeAreaProvider style={{ flex: 1 }}>
         <ThemeProvider
           value={colorScheme === "dark" ? DarkTheme : DefaultTheme}
         >
@@ -97,6 +99,10 @@ export default function RootLayout() {
               />
               <Stack.Screen
                 name="private-chat/[conversationId]"
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="match-call/[matchUid]"
                 options={{ headerShown: false }}
               />
             </Stack.Protected>

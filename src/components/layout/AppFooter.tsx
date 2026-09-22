@@ -1,7 +1,15 @@
 import { Image } from "expo-image";
 import { router, usePathname } from "expo-router";
 import type { FC } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useState } from "react";
+import {
+  Alert,
+  Pressable,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import Svg, { Path } from "react-native-svg";
 import type { SvgProps } from "react-native-svg";
 
@@ -13,7 +21,9 @@ import HomeIcon from "@/src/assets/icons/home_icon.svg";
 import HomeIconActive from "@/src/assets/icons/home_icon_slc.svg";
 import SowahAvatar from "@/src/assets/images/sowah-avar.svg";
 
+import { ENV } from "@/src/config/env";
 import { useHomeFeedControlStore } from "@/src/features/home/stores/home-feed-control.store";
+import { matchingApi } from "@/src/features/matching/api/matching.api";
 import { useProfile } from "@/src/features/profile/hooks/useProfile";
 import { useMatchFrameStore } from "@/src/stores/match-frame.store";
 import { colors } from "@/src/theme/colors";
@@ -109,7 +119,10 @@ export default function AppFooter() {
     (state) => state.requestHomeFeedReset,
   );
 
-  const toggleMatchFrame = useMatchFrameStore((state) => state.toggle);
+  const isMatching = useMatchFrameStore((state) => state.status === "matching");
+  const startMatching = useMatchFrameStore((state) => state.startMatching);
+  const finishMatching = useMatchFrameStore((state) => state.finishMatching);
+  const [isChangingMatchState, setIsChangingMatchState] = useState(false);
 
   // 跟 Profile 頁同一個 hook / store，兩處頭像一定一致；沒有頭像時 avatarUri 會是 null
   const { profile } = useProfile({ variant: "self" });
@@ -129,6 +142,41 @@ export default function AppFooter() {
     }
 
     router.push(item.path);
+  };
+
+  const handlePlayPress = async () => {
+    if (isChangingMatchState) return;
+    if (__DEV__) console.info("[matchmaking] PLAY onPress received");
+    setIsChangingMatchState(true);
+    try {
+      if (isMatching) {
+        if (!ENV.matchingMock) await matchingApi.leaveQueue();
+        finishMatching();
+        return;
+      }
+
+      if (!ENV.matchingMock) {
+        try {
+          await matchingApi.enterQueue();
+        } catch (error) {
+          const status =
+            typeof error === "object" && error !== null && "response" in error
+              ? (error as { response?: { status?: number } }).response?.status
+              : undefined;
+          // 409 代表後端已在隊列；直接恢復本地 matching 並開始 poll。
+          if (status !== 409) throw error;
+        }
+      }
+      startMatching();
+    } catch (error) {
+      console.warn("[matchmaking] queue action failed", error);
+      Alert.alert(
+        isMatching ? "無法取消配對" : "無法開始配對",
+        "請檢查網路後再試一次。",
+      );
+    } finally {
+      setIsChangingMatchState(false);
+    }
   };
 
   const renderItem = (item: FooterItem) => {
@@ -187,16 +235,12 @@ export default function AppFooter() {
 
       <View style={styles.playWrap} pointerEvents="box-none">
         {/* 白環（靜態、不發光）→ 橘外圈(#FFC080，微微發光) → 橘內圈(#FF8100) */}
-        <View style={styles.playRing}>
-          <View style={styles.playOuter}>
-            <TouchableOpacity
-              activeOpacity={0.85}
-              style={styles.playButton}
-              onPress={toggleMatchFrame}
-            >
+        <View style={styles.playRing} pointerEvents="box-none">
+          <View style={styles.playOuter} pointerEvents="none">
+            <View style={styles.playButton}>
               <Text style={styles.playText}>PLAY</Text>
               <Text style={styles.playSubText}>1V1 MATCH</Text>
-            </TouchableOpacity>
+            </View>
           </View>
 
           {/*
@@ -219,6 +263,26 @@ export default function AppFooter() {
               fill="none"
             />
           </Svg>
+
+          {/*
+            實際觸控層獨立放在所有 SVG／光暈裝飾上方，避免裝飾元件攔截事件。
+            hitSlop 只作為容錯；父層 footerLayer 也已擴大到涵蓋凸出的整顆按鈕。
+          */}
+          <Pressable
+            style={styles.playTouchTarget}
+            hitSlop={8}
+            onPressIn={() => {
+              if (__DEV__)
+                console.info("[matchmaking] PLAY onPressIn received");
+            }}
+            disabled={isChangingMatchState}
+            onPress={() => void handlePlayPress()}
+            accessibilityRole="button"
+            accessibilityLabel={
+              isMatching ? "取消 1 對 1 配對" : "開始 1 對 1 配對"
+            }
+            accessibilityState={{ busy: isChangingMatchState }}
+          />
         </View>
       </View>
 
@@ -313,6 +377,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#FF8100",
     alignItems: "center",
     justifyContent: "center",
+  },
+  playTouchTarget: {
+    position: "absolute",
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    zIndex: 20,
+    elevation: 20,
   },
   playText: {
     fontSize: 20,

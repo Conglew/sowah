@@ -10,6 +10,9 @@ export const ENV = {
   // 正式環境不要以這個公開變數作為唯一授權依據，後端仍須驗證會員資格。
   membershipTier: process.env.EXPO_PUBLIC_MEMBERSHIP_TIER ?? "",
 
+  // 單機展示完整配對與通話 UI；true 時不呼叫 matching / Agora API。
+  matchingMock: process.env.EXPO_PUBLIC_MATCHING_MOCK === "true",
+
   firebase: {
     apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY ?? "",
     authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN ?? "",

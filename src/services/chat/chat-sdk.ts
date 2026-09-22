@@ -33,19 +33,27 @@ export type GetMessageListResult = {
 };
 
 let chat: ChatSDK | null = null;
+let chatSdkAppId: number | null = null;
 let loggedIn = false;
 /** 進行中的 login；讓同時發生的多次 loginChat 共用同一個請求，不會送出兩次 sdk.login */
 let loginPromise: Promise<void> | null = null;
 
-/** 取得（必要時建立）SDK 單例 */
-export function getChatSDK(): ChatSDK {
+/** 只讀取已建立的 instance；不會因全局 listener 而提早用 .env 初始化。 */
+export function getExistingChatSDK(): ChatSDK | null {
+  return chat;
+}
+
+/** 取得（必要時建立）SDK 單例；首次建立優先採用後端 credential 的 SDKAppID。 */
+export function getChatSDK(sdkAppId?: number): ChatSDK {
+  const requestedSdkAppId = sdkAppId ?? chatSdkAppId ?? ENV.chat.sdkAppId;
   if (!chat) {
-    if (!ENV.chat.sdkAppId) {
+    if (!requestedSdkAppId) {
       throw new Error(
-        "[chat] 缺少 SDKAppID，請在 .env 設定 EXPO_PUBLIC_CHAT_SDK_APP_ID",
+        "[chat] 缺少 SDKAppID，後端 /chat/user-sig 尚未回傳有效設定",
       );
     }
-    chat = TencentCloudChat.create({ SDKAppID: ENV.chat.sdkAppId });
+    chat = TencentCloudChat.create({ SDKAppID: requestedSdkAppId });
+    chatSdkAppId = requestedSdkAppId;
     // 0 = debug（開發期看得到連線 / 收發 log），1 = release
     chat.setLogLevel(__DEV__ ? 0 : 1);
 
@@ -55,6 +63,13 @@ export function getChatSDK(): ChatSDK {
     chat.on(TencentCloudChat.EVENT.KICKED_OUT, () => {
       loggedIn = false;
     });
+  }
+
+  // 只有呼叫端明確帶入（後端 credential）時才驗證；一般 SDK 操作沿用既有 instance。
+  if (sdkAppId !== undefined && chatSdkAppId !== sdkAppId) {
+    throw new Error(
+      `[chat] 後端 SDKAppID (${sdkAppId}) 與目前 Chat instance (${chatSdkAppId}) 不一致`,
+    );
   }
 
   return chat;
@@ -88,8 +103,9 @@ function waitForSDKReady(sdk: ChatSDK, timeoutMs = 8000): Promise<void> {
 export async function loginChat(
   userID: string,
   userSig: string,
+  sdkAppId?: number,
 ): Promise<void> {
-  const sdk = getChatSDK();
+  const sdk = getChatSDK(sdkAppId);
   const currentUserID = sdk.getLoginUser();
 
   // Metro reload / Fast Refresh 會保留 SDK singleton，但模組內的 loggedIn 可能已重設。
@@ -187,7 +203,8 @@ export async function sendTextMessage(params: {
   const sdk = getChatSDK();
 
   const message = sdk.createTextMessage({
-    to: params.to,
+    // 後端簽發的 Chat UserID 為 UUID simple-hex（不含連字號）。
+    to: params.to.replaceAll("-", ""),
     conversationType: ChatType.CONV_C2C,
     payload: { text: params.text },
   });

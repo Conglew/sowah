@@ -8,8 +8,7 @@ import type {
   AuthUser,
 } from "@/src/features/auth/types";
 import { usersApi } from "@/src/features/profile/api/users.api";
-import { ENV } from "@/src/config/env";
-import { getUserSig, loginChat, logoutChat } from "@/src/services/chat";
+import { getChatCredentials, loginChat, logoutChat } from "@/src/services/chat";
 import {
   setAccessToken,
   setOnAuthFailure,
@@ -36,7 +35,10 @@ function isNotFound(error: unknown): boolean {
 // 只在 __DEV__ 生效，正式版不會印出使用者識別碼。
 function logChatUserId(user: AuthUser): void {
   if (__DEV__) {
-    console.log("[chat] 你的 user_uid（複製這個去 gen-usersig.js）:", user.user_uid);
+    console.log(
+      "[chat] 你的 user_uid（複製這個去 gen-usersig.js）:",
+      user.user_uid,
+    );
   }
 }
 
@@ -45,12 +47,14 @@ function logChatUserId(user: AuthUser): void {
 // 也刻意不看 USE_CHAT——先把 Chat 連起來、印出成功/失敗，方便你在切換訊息來源前就確認登入 OK。
 // 沒設定 SDKAppID（還沒接 Chat）時直接跳過，不會噴錯。
 function connectChat(user: AuthUser): void {
-  if (!ENV.chat.sdkAppId) return;
-
   void (async () => {
     try {
-      const userSig = await getUserSig(user.user_uid);
-      await loginChat(user.user_uid, userSig);
+      const credentials = await getChatCredentials(user.user_uid);
+      await loginChat(
+        credentials.userID,
+        credentials.userSig,
+        credentials.sdkAppId,
+      );
       if (__DEV__) console.log("[chat] 登入成功 ✅", user.user_uid);
     } catch (error) {
       console.warn("[chat] 登入失敗 ❌", error);

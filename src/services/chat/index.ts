@@ -1,6 +1,7 @@
 export {
   ChatEvent,
   ChatType,
+  getExistingChatSDK,
   getChatSDK,
   getConversationUnreadCounts,
   getMessageListPage,
@@ -17,4 +18,8 @@ export {
   toPeerUserID,
   toPrivateMessage,
 } from "./chat-mappers";
-export { getUserSig } from "./chat-usersig";
+export {
+  getChatCredentials,
+  getUserSig,
+  type ChatCredentials,
+} from "./chat-usersig";

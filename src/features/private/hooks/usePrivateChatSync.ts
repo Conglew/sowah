@@ -4,7 +4,7 @@ import type { Conversation, Message } from "@tencentcloud/chat";
 
 import {
   ChatEvent,
-  getChatSDK,
+  getExistingChatSDK,
   setConversationRead,
   toPeerUserID,
   toPrivateMessage,
@@ -26,18 +26,6 @@ import { usePrivateStore } from "../stores/private.store";
 export function usePrivateChatSync(): void {
   useEffect(() => {
     if (!USE_CHAT) return;
-
-    let chat;
-    try {
-      chat = getChatSDK();
-    } catch (error) {
-      // 缺 SDKAppID 之類的設定問題：不擋 App 啟動，只記一筆。
-      console.warn(
-        "[usePrivateChatSync] 取得 Chat SDK 失敗，略過全域收訊訂閱",
-        error,
-      );
-      return;
-    }
 
     const handler = (event: { data: Message[] }) => {
       const store = usePrivateStore.getState();
@@ -65,11 +53,34 @@ export function usePrivateChatSync(): void {
       }
     };
 
-    chat.on(ChatEvent.MESSAGE_RECEIVED, handler);
-    chat.on(ChatEvent.CONVERSATION_LIST_UPDATED, conversationHandler);
+    let detach: (() => void) | undefined;
+    const attach = () => {
+      if (detach) return true;
+      const chat = getExistingChatSDK();
+      if (!chat) return false;
+
+      chat.on(ChatEvent.MESSAGE_RECEIVED, handler);
+      chat.on(ChatEvent.CONVERSATION_LIST_UPDATED, conversationHandler);
+      detach = () => {
+        chat.off(ChatEvent.MESSAGE_RECEIVED, handler);
+        chat.off(ChatEvent.CONVERSATION_LIST_UPDATED, conversationHandler);
+      };
+      if (__DEV__) console.info("[chat] 全局收訊 listener 已掛載");
+      return true;
+    };
+
+    let timer: ReturnType<typeof setInterval> | undefined;
+    if (!attach()) {
+      timer = setInterval(() => {
+        if (attach() && timer) {
+          clearInterval(timer);
+          timer = undefined;
+        }
+      }, 250);
+    }
     return () => {
-      chat.off(ChatEvent.MESSAGE_RECEIVED, handler);
-      chat.off(ChatEvent.CONVERSATION_LIST_UPDATED, conversationHandler);
+      if (timer) clearInterval(timer);
+      detach?.();
     };
   }, []);
 }

@@ -6,24 +6,26 @@ import { create } from "zustand";
  */
 export const MATCH_FRAME_ENABLED = true;
 
-/** 控制「1V1 Match」全螢幕橘色邊框是否顯示 */
+export type MatchmakingStatus = "idle" | "matching";
+
+/** 控制 1V1 配對狀態；橘色邊框只是 matching 狀態的全局視覺呈現。 */
 type MatchFrameState = {
-  active: boolean;
-  show: () => void;
-  hide: () => void;
-  toggle: () => void;
+  status: MatchmakingStatus;
+  startMatching: () => void;
+  finishMatching: () => void;
 };
 
 export const useMatchFrameStore = create<MatchFrameState>((set) => ({
-  active: false,
-  show: () => {
+  status: "idle",
+  startMatching: () => {
     if (MATCH_FRAME_ENABLED) {
-      set({ active: true });
+      if (__DEV__) console.info("[matchmaking] status: idle -> matching");
+      set({ status: "matching" });
     }
   },
-  hide: () => set({ active: false }),
-  toggle: () =>
-    set((state) => ({
-      active: MATCH_FRAME_ENABLED ? !state.active : false,
-    })),
+  // 配對成功、失敗、逾時或使用者取消時都呼叫這個 action。
+  finishMatching: () => {
+    if (__DEV__) console.info("[matchmaking] status -> idle");
+    set({ status: "idle" });
+  },
 }));

@@ -1,35 +1,48 @@
 import { apiClient } from "@/src/services/api/http-client";
 
+export type ChatCredentials = {
+  sdkAppId: number;
+  userID: string;
+  userSig: string;
+  expireSecs: number;
+  issuedAt: string;
+};
+
+const toChatUserID = (userUid: string) => userUid.replaceAll("-", "");
+
+type UserSigResponse = {
+  sdk_app_id: number;
+  user_id: string;
+  user_sig: string;
+  expire_secs: number;
+  issued_at: string;
+};
+
 /**
  * 取得登入 Chat 用的 UserSig。
  *
  * ⚠️ 安全原則：UserSig 用 SECRETKEY 簽出來，SECRETKEY 絕對不能放進前端 App。
  *
- * - 測試期：在本機用 scripts/gen-usersig.js 產生一組 UserSig，貼進 .env 的
- *   EXPO_PUBLIC_CHAT_TEST_USERSIG，這支就直接回傳它（只在 __DEV__ 生效）。
- * - 正式期：清掉那個 env，改由「你的後端」用 SECRETKEY 簽發，這支會走 apiClient
- *   打你後端的 /chat/usersig（接在你目前還是 mock 的那層 API 上）。
+ * 固定由後端 POST /chat/user-sig 使用 SECRETKEY 簽發；前端不再讀取測試 UserSig，
+ * 避免過期簽章或錯誤 userID 在開發環境悄悄覆蓋正式後端結果。
  */
-export async function getUserSig(userID: string): Promise<string> {
-  const testSig = process.env.EXPO_PUBLIC_CHAT_TEST_USERSIG;
-  const testUserID = process.env.EXPO_PUBLIC_CHAT_TEST_USER_ID;
-
-  if (__DEV__ && testSig) {
-    // 測試用 sig 是簽給「某一個」userID 的。換帳號登入時若照樣回傳同一組，
-    // SDK 只會噴 70009/70013 這種看不出原因的錯，這裡先擋下來並直接告訴你要重簽哪個 userID。
-    if (testUserID && testUserID !== userID) {
-      throw new Error(
-        `[chat] 測試 UserSig 是簽給 ${testUserID} 的，目前登入者是 ${userID}。` +
-          `請執行：node scripts/gen-usersig.js ${userID}`,
-      );
-    }
-
-    return testSig;
+export async function getChatCredentials(
+  userID: string,
+): Promise<ChatCredentials> {
+  const { data } = await apiClient.post<UserSigResponse>("/chat/user-sig");
+  if (data.user_id !== toChatUserID(userID)) {
+    throw new Error("[chat] 後端 UserSig 的 user_id 與目前登入者不一致");
   }
 
-  const { data } = await apiClient.post<{ userSig: string }>("/chat/usersig", {
-    userID,
-  });
+  return {
+    sdkAppId: data.sdk_app_id,
+    userID: data.user_id,
+    userSig: data.user_sig,
+    expireSecs: data.expire_secs,
+    issuedAt: data.issued_at,
+  };
+}
 
-  return data.userSig;
+export async function getUserSig(userID: string): Promise<string> {
+  return (await getChatCredentials(userID)).userSig;
 }

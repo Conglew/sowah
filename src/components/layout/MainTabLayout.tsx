@@ -115,7 +115,7 @@ export default function MainTabLayout({ children }: MainTabLayoutProps) {
         </View>
       )}
 
-      <View style={styles.footerLayer}>
+      <View style={styles.footerLayer} pointerEvents="box-none">
         <AppFooter />
       </View>
     </View>
@@ -155,6 +155,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    height: 116,
+    justifyContent: "flex-end",
     zIndex: 100,
     elevation: 100,
   },
