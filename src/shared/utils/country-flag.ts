@@ -213,6 +213,17 @@ const COUNTRY_NAMES: Record<CountryCode, string> = {
   MX: "Mexico",
 };
 
+/** 國家代碼 -> 英文全名。查不到時回 null，讓呼叫端自己決定要不要顯示。 */
+export function getCountryName(countryCode?: string | null): string | null {
+  if (!countryCode) return null;
+
+  const normalizedCountryCode = countryCode.trim().toUpperCase();
+
+  return normalizedCountryCode in COUNTRY_NAMES
+    ? COUNTRY_NAMES[normalizedCountryCode as CountryCode]
+    : null;
+}
+
 export type CountryOption = {
   code: CountryCode;
   name: string;

@@ -3,6 +3,7 @@ import {
   ChannelProfileType,
   ClientRoleType,
   createAgoraRtcEngine,
+  type AudioVolumeInfo,
   type ErrorCodeType,
   type IRtcEngine,
   type IRtcEngineEventHandler,
@@ -16,6 +17,15 @@ import {
   type AgoraCallSource,
 } from "./agora-call.api";
 
+/**
+ * Agora 音量回報的取樣間隔（毫秒）。
+ * 太短會讓 JS 端每秒被喚醒很多次，太長則邊框跟不上說話節奏，200ms 是實測的平衡點。
+ */
+const VOLUME_INDICATION_INTERVAL_MS = 200;
+
+/** 音量平滑係數（0-10）。數字越大越不容易因為單一音節跳動。 */
+const VOLUME_INDICATION_SMOOTH = 3;
+
 export type AgoraVoiceListener = {
   onJoined?: (connection: RtcConnection) => void;
   onRemoteUserJoined?: (uid: number) => void;
@@ -23,6 +33,11 @@ export type AgoraVoiceListener = {
   onLeft?: () => void;
   onError?: (code: ErrorCodeType, message: string) => void;
   onTokenRenewed?: (credentials: AgoraCallCredentials) => void;
+  /**
+   * 音量回報。speakers 內 uid 為 0 的那筆代表「本地使用者」（Agora 的慣例，
+   * 不是你自己的 uid），其餘為遠端。需要 enableAudioVolumeIndication 開啟後才會有事件。
+   */
+  onAudioVolume?: (speakers: AudioVolumeInfo[], totalVolume: number) => void;
 };
 
 class AgoraVoiceService {
@@ -48,6 +63,9 @@ class AgoraVoiceService {
     },
     onError: (code, message) => {
       this.listener.onError?.(code, message);
+    },
+    onAudioVolumeIndication: (_connection, speakers, _speakerNumber, total) => {
+      this.listener.onAudioVolume?.(speakers ?? [], total ?? 0);
     },
     onTokenPrivilegeWillExpire: () => {
       void this.renewToken();
@@ -165,6 +183,13 @@ class AgoraVoiceService {
 
     engine.registerEventHandler(this.eventHandler);
     engine.enableAudio();
+    // 不主動呼叫這行就完全不會有 onAudioVolumeIndication 事件（Agora 預設關閉）。
+    // 第三個參數 reportVad=true 會額外回報本地的人聲偵測結果。
+    engine.enableAudioVolumeIndication(
+      VOLUME_INDICATION_INTERVAL_MS,
+      VOLUME_INDICATION_SMOOTH,
+      true,
+    );
     this.engine = engine;
     this.appId = appId;
   }
