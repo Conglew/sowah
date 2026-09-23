@@ -1,13 +1,13 @@
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -18,16 +18,27 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import SowahAvatar from "@/src/assets/images/sowah-avar.svg";
 import { AppLogoHeader } from "@/src/components/layout/AppHeader";
-import { usersApi } from "@/src/features/profile/api/users.api";
 import { hasPaidMembership } from "@/src/features/membership/membership-access";
-import { useAuthStore } from "@/src/stores/auth.store";
 import type { UserProfile } from "@/src/features/profile/types";
 import { getCountryFlag } from "@/src/shared/utils/country-flag";
+import { useAuthStore } from "@/src/stores/auth.store";
 import { colors } from "@/src/theme/colors";
 import { useFriends } from "../hooks/useFriends";
-import type { Friend, FriendRequest } from "../types/friends.types";
+import { MIN_QUERY_LENGTH, useUserSearch } from "../hooks/useUserSearch";
+import type { UserRelationship } from "../utils/relationship";
+import { buildRelationshipLookup } from "../utils/relationship";
 
-const SEARCH_DELAY_MS = 300;
+/**
+ * 非 "none" 的關係都不能再送邀請。
+ * 同一份對照表同時決定按鈕能不能按、以及按下去要說什麼，兩者不會再走鐘。
+ */
+const RELATIONSHIP_MESSAGE: Record<UserRelationship, string | null> = {
+  self: "這是你自己的帳號。",
+  friend: "已添加過好友。",
+  "request-sent": "已發送過好友邀請。",
+  "request-received": "對方已邀請你，請到 Private 聊天室接受或拒絕。",
+  none: null,
+};
 
 function getStatus(error: unknown): number | undefined {
   return typeof error === "object" && error !== null && "response" in error
@@ -40,38 +51,29 @@ export default function FriendsPage() {
   const authUser = useAuthStore((state) => state.user);
   const friendsState = useFriends();
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<UserProfile[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
   const [invitingUid, setInvitingUid] = useState<string | null>(null);
 
-  useEffect(() => {
-    const target = query.trim();
-    if (!target) {
-      setResults([]);
-      setIsSearching(false);
-      return;
-    }
-    let active = true;
-    const timer = setTimeout(() => {
-      setIsSearching(true);
-      void usersApi
-        .search(target, { limit: 30, offset: 0 })
-        .then((page) => {
-          if (active) setResults(page.users);
-        })
-        .catch((error: unknown) => {
-          console.warn("[friends-search] failed", error);
-          if (active) setResults([]);
-        })
-        .finally(() => {
-          if (active) setIsSearching(false);
-        });
-    }, SEARCH_DELAY_MS);
-    return () => {
-      active = false;
-      clearTimeout(timer);
-    };
-  }, [query]);
+  const {
+    results,
+    appliedQuery,
+    isSearching,
+    isLoadingMore,
+    hasMore,
+    error,
+    loadMore,
+  } = useUserSearch(query);
+
+  const { friends, incoming, outgoing } = friendsState;
+  const relationshipOf = useMemo(
+    () =>
+      buildRelationshipLookup({
+        currentUserUid: authUser?.user_uid,
+        friends,
+        incoming,
+        outgoing,
+      }),
+    [authUser?.user_uid, friends, incoming, outgoing],
+  );
 
   const invite = async (profile: UserProfile) => {
     if (invitingUid) return;
@@ -79,14 +81,11 @@ export default function FriendsPage() {
       Alert.alert("付費會員限定", "升級為付費會員後，才可以發送好友邀請。");
       return;
     }
-    const duplicateMessage = getExistingRelationshipMessage(
-      profile.user_uid,
-      friendsState.friends,
-      friendsState.incoming,
-      friendsState.outgoing,
-    );
-    if (duplicateMessage) {
-      Alert.alert("無法重複邀請", duplicateMessage);
+
+    const blockedMessage =
+      RELATIONSHIP_MESSAGE[relationshipOf(profile.user_uid)];
+    if (blockedMessage) {
+      Alert.alert("無法邀請", blockedMessage);
       return;
     }
 
@@ -94,16 +93,99 @@ export default function FriendsPage() {
     try {
       await friendsState.sendRequest(profile.user_uid);
       Alert.alert("已發送好友邀請", `已邀請 ${profile.user_id}`);
-    } catch (error) {
+    } catch (requestError) {
       Alert.alert(
         "無法發送邀請",
-        getStatus(error) === 409
+        getStatus(requestError) === 409
           ? "已發送過好友邀請或已添加過好友。"
           : "請稍後再試一次。",
       );
     } finally {
       setInvitingUid(null);
     }
+  };
+
+  const renderItem = useCallback(
+    ({ item }: { item: UserProfile }) => {
+      const relationship = relationshipOf(item.user_uid);
+      const isSelf = relationship === "self";
+      const isBlocked = relationship !== "none";
+
+      return (
+        <View style={styles.userRow}>
+          {item.avatar?.download_url ? (
+            <Image
+              source={{ uri: item.avatar.download_url }}
+              style={styles.avatar}
+              contentFit="cover"
+            />
+          ) : (
+            <View style={[styles.avatar, styles.avatarFallback]}>
+              <SowahAvatar width={42} height={42} />
+            </View>
+          )}
+          <Text style={styles.username} numberOfLines={1}>
+            {item.user_id} {getCountryFlag(item.country)}
+            {isSelf ? "（你）" : ""}
+          </Text>
+          {isSelf ? null : (
+            <TouchableOpacity
+              style={styles.addButton}
+              disabled={isBlocked || invitingUid !== null}
+              onPress={() => void invite(item)}
+              accessibilityLabel={`邀請 ${item.user_id} 成為好友`}
+            >
+              {invitingUid === item.user_uid ? (
+                <ActivityIndicator size="small" color="#111111" />
+              ) : (
+                <Text
+                  style={[styles.addIcon, isBlocked && styles.addIconDisabled]}
+                >
+                  {isBlocked ? "✓" : "+"}
+                </Text>
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
+      );
+    },
+    // invite 依賴 invitingUid / authUser / friendsState，這裡以 invitingUid 為主要變動來源
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [invitingUid, relationshipOf],
+  );
+
+  const trimmedQuery = query.trim();
+
+  /**
+   * 空狀態的優先序：限流 > 一般錯誤 > 字數不足 > 真的查無此人。
+   * 「查無此人」只在 appliedQuery 有值（= 真的送出去查過並回來了）時才顯示，
+   * 否則使用者還在打字的那 450ms 就會看到一句假話。
+   */
+  const renderEmpty = () => {
+    if (isSearching) {
+      return <ActivityIndicator style={styles.loading} color={colors.brand} />;
+    }
+    if (error === "rate-limited") {
+      return (
+        <Text style={styles.emptyText}>
+          搜尋太頻繁，請稍候幾秒再試。{"\n"}（這不代表查無此人）
+        </Text>
+      );
+    }
+    if (error === "failed") {
+      return <Text style={styles.emptyText}>搜尋失敗，請稍後再試。</Text>;
+    }
+    if (trimmedQuery.length > 0 && trimmedQuery.length < MIN_QUERY_LENGTH) {
+      return (
+        <Text style={styles.emptyText}>
+          請至少輸入 {MIN_QUERY_LENGTH} 個字再搜尋。
+        </Text>
+      );
+    }
+    if (appliedQuery) {
+      return <Text style={styles.emptyText}>找不到符合的使用者</Text>;
+    }
+    return null;
   };
 
   return (
@@ -131,85 +213,28 @@ export default function FriendsPage() {
         </View>
         <View style={styles.separator} />
 
-        <ScrollView
+        <FlatList
           style={styles.flex}
           contentContainerStyle={styles.results}
+          data={results}
+          keyExtractor={(item) => item.user_uid}
+          renderItem={renderItem}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
-        >
-          {isSearching ? (
-            <ActivityIndicator style={styles.loading} color={colors.brand} />
-          ) : query.trim() && results.length === 0 ? (
-            <Text style={styles.emptyText}>找不到符合的使用者</Text>
-          ) : (
-            results.map((profile) => {
-              const relationship = getExistingRelationshipMessage(
-                profile.user_uid,
-                friendsState.friends,
-                friendsState.incoming,
-                friendsState.outgoing,
-              );
-              return (
-                <View key={profile.user_uid} style={styles.userRow}>
-                  {profile.avatar?.download_url ? (
-                    <Image
-                      source={{ uri: profile.avatar.download_url }}
-                      style={styles.avatar}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <View style={[styles.avatar, styles.avatarFallback]}>
-                      <SowahAvatar width={42} height={42} />
-                    </View>
-                  )}
-                  <Text style={styles.username} numberOfLines={1}>
-                    {profile.user_id} {getCountryFlag(profile.country)}
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.addButton}
-                    disabled={Boolean(relationship) || invitingUid !== null}
-                    onPress={() => void invite(profile)}
-                    accessibilityLabel={`邀請 ${profile.user_id} 成為好友`}
-                  >
-                    {invitingUid === profile.user_uid ? (
-                      <ActivityIndicator size="small" color="#111111" />
-                    ) : (
-                      <Text
-                        style={[
-                          styles.addIcon,
-                          relationship && styles.addIconDisabled,
-                        ]}
-                      >
-                        {relationship ? "✓" : "+"}
-                      </Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              );
-            })
-          )}
-        </ScrollView>
+          onEndReached={() => void loadMore()}
+          onEndReachedThreshold={0.4}
+          ListEmptyComponent={renderEmpty()}
+          ListFooterComponent={
+            isLoadingMore ? (
+              <ActivityIndicator style={styles.footer} color={colors.brand} />
+            ) : hasMore ? (
+              <View style={styles.footer} />
+            ) : null
+          }
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
-}
-
-function getExistingRelationshipMessage(
-  userUid: string,
-  friends: Friend[],
-  incoming: FriendRequest[],
-  outgoing: FriendRequest[],
-): string | null {
-  if (friends.some((friend) => friend.user_uid === userUid)) {
-    return "已添加過好友";
-  }
-  if (outgoing.some((request) => request.user_uid === userUid)) {
-    return "已發送過好友邀請";
-  }
-  if (incoming.some((request) => request.user_uid === userUid)) {
-    return "對方已邀請你，請到 Private 聊天室接受或拒絕。";
-  }
-  return null;
 }
 
 const styles = StyleSheet.create({
@@ -241,9 +266,15 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: "#E6E6E6",
   },
-  results: { paddingHorizontal: 20, paddingBottom: 30 },
+  results: { paddingHorizontal: 20, paddingBottom: 30, flexGrow: 1 },
   loading: { marginTop: 40 },
-  emptyText: { marginTop: 40, textAlign: "center", color: "#999999" },
+  footer: { height: 44, justifyContent: "center" },
+  emptyText: {
+    marginTop: 40,
+    textAlign: "center",
+    lineHeight: 20,
+    color: "#999999",
+  },
   userRow: {
     height: 62,
     paddingHorizontal: 18,

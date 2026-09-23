@@ -34,6 +34,28 @@ export type UserProfile = {
   updated_at: string;
 };
 
+/** GET /users/search 的 query 參數 */
+export type UserSearchParams = {
+  /**
+   * 以公開 user_id 的子字串比對（不分大小寫）。後端標為必填。
+   * 空字串的語意後端沒有定義，不要拿它來當「列出所有人」用。
+   */
+  user_id: string;
+  limit?: number;
+  offset?: number;
+};
+
+/**
+ * GET /users/search 回應。
+ * users 裡的每一筆就是完整的 UserProfile，不是精簡版，可以直接餵給顯示 profile 的元件。
+ */
+export type UserSearchPage = {
+  limit: number;
+  offset: number;
+  total: number;
+  users: UserProfile[];
+};
+
 /** POST /users/me（onboarding 初始化，三個皆必填） */
 export type InitUserProfileRequest = {
   country: string;
