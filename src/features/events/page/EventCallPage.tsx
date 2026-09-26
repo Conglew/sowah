@@ -21,7 +21,9 @@ import {
 import SowahAvatar from "@/src/assets/images/sowah-avar.svg";
 import { AppLogoHeader } from "@/src/components/layout/AppHeader";
 import { useProfile } from "@/src/features/profile/hooks/useProfile";
+import { MicSwitch } from "@/src/features/matching/components/MicSwitch";
 import { agoraVoice } from "@/src/services/agora";
+import { getCountryFlag } from "@/src/shared/utils/country-flag";
 import { colors } from "@/src/theme/colors";
 import { eventsApi } from "../api/events.api";
 import type { EventParticipant, EventResource } from "../types/events.types";
@@ -34,7 +36,7 @@ const MOCK_EVENT: EventResource = {
   creator_uid: "dev-host",
   title: "How Traveling Changes the Way We See the World",
   description:
-    "1. What is the most memorable trip you've ever taken?\n2. Has traveling ever changed your opinion about a country, culture, or way of life?\n3. What is the biggest challenge you've faced while traveling?",
+    "1. What is the most memorable trip you've ever taken, and what made it special?\n2. Has traveling ever changed your opinion about a country, culture, or way of life?\n3. What is the biggest challenge you've faced while traveling, and how did you deal with it?\n4. If you could live in any country for one year, where would you choose and why?\n5. What do you think is more important when traveling: seeing famous attractions or experiencing local life?",
   start: new Date().toISOString(),
   end: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
   duration_minutes: 30,
@@ -104,7 +106,7 @@ export default function EventCallPage() {
   const [status, setStatus] = useState<CallStatus>("connecting");
   const [error, setError] = useState<string | null>(null);
   const [muted, setMuted] = useState(false);
-  const [elapsed, setElapsed] = useState(0);
+  const [remainingSeconds, setRemainingSeconds] = useState(30 * 60);
   const [message, setMessage] = useState("");
   const [reportStage, setReportStage] = useState<ReportStage>(null);
   const [reportedUser, setReportedUser] = useState<EventParticipant | null>(
@@ -205,9 +207,30 @@ export default function EventCallPage() {
 
   useEffect(() => {
     if (status !== "joined") return;
-    const timer = setInterval(() => setElapsed((value) => value + 1), 1000);
+    const timer = setInterval(
+      () => setRemainingSeconds((value) => Math.max(0, value - 1)),
+      1000,
+    );
     return () => clearInterval(timer);
   }, [status]);
+
+  useEffect(() => {
+    if (!event) return;
+    const fullDurationSeconds = Math.max(0, event.duration_minutes * 60);
+    if (isMock) {
+      setRemainingSeconds(fullDurationSeconds);
+      return;
+    }
+
+    const secondsUntilEventEnd = Math.ceil(
+      (new Date(event.end).getTime() - Date.now()) / 1000,
+    );
+    setRemainingSeconds(
+      Number.isFinite(secondsUntilEventEnd)
+        ? Math.max(0, Math.min(fullDurationSeconds, secondsUntilEventEnd))
+        : fullDurationSeconds,
+    );
+  }, [event, isMock]);
 
   const visibleParticipants = useMemo(() => {
     if (participants.length > 0) return participants;
@@ -230,8 +253,7 @@ export default function EventCallPage() {
     ];
   }, [participants, selfProfile]);
 
-  const toggleMute = () => {
-    const next = !muted;
+  const applyMuted = (next: boolean) => {
     if (!isMock) {
       try {
         agoraVoice.setMuted(next);
@@ -270,11 +292,11 @@ export default function EventCallPage() {
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
       <AppLogoHeader />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+      <View style={styles.content}>
         <View style={styles.topicCard}>
+          <View style={styles.topicWatermark} pointerEvents="none">
+            <SowahAvatar width={150} height={150} />
+          </View>
           <Text style={styles.label}>Topic</Text>
           <Text style={styles.topic}>{event?.title ?? "Event voice room"}</Text>
           <Text style={[styles.label, styles.descriptionLabel]}>
@@ -286,79 +308,105 @@ export default function EventCallPage() {
           </Text>
         </View>
 
-        <View style={styles.participantGrid}>
-          {visibleParticipants.map((participant, index) => {
-            const isSelf = isMock
-              ? index === 0
-              : participant.user_uid === selfProfile?.id;
-            const isMuted = isSelf
-              ? muted
-              : Boolean(remoteMuted[participant.user_uid]);
-            return (
-              <View key={participant.user_uid} style={styles.participantCell}>
-                <View style={styles.avatarWrap}>
-                  {participant.profile.avatar?.download_url ? (
-                    <Image
-                      source={{ uri: participant.profile.avatar.download_url }}
-                      style={styles.avatar}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <SowahAvatar width={56} height={56} />
-                  )}
-                  {isMuted && (
-                    <View style={styles.mutedBadge}>
-                      <Ionicons name="mic-off" size={27} color="#FF343C" />
+        <View style={styles.callDetails}>
+          <View style={styles.participantsAndPrompts}>
+            <View style={styles.participantGrid}>
+              {visibleParticipants.slice(0, 6).map((participant, index) => {
+                const isSelf = isMock
+                  ? index === 0
+                  : participant.user_uid === selfProfile?.id;
+                const isMuted = isSelf
+                  ? muted
+                  : Boolean(remoteMuted[participant.user_uid]);
+                return (
+                  <View
+                    key={participant.user_uid}
+                    style={styles.participantCell}
+                  >
+                    <View style={styles.avatarWrap}>
+                      {participant.profile.avatar?.download_url ? (
+                        <Image
+                          source={{
+                            uri: participant.profile.avatar.download_url,
+                          }}
+                          style={styles.avatar}
+                          contentFit="cover"
+                        />
+                      ) : (
+                        <SowahAvatar width={45} height={45} />
+                      )}
+                      {isMuted && (
+                        <View style={styles.mutedBadge}>
+                          <Ionicons name="mic-off" size={22} color="#FF343C" />
+                        </View>
+                      )}
+                      {participant.profile.country ? (
+                        <View style={styles.flagBadge}>
+                          <Text style={styles.flagText}>
+                            {getCountryFlag(participant.profile.country)}
+                          </Text>
+                        </View>
+                      ) : null}
                     </View>
-                  )}
-                </View>
-                <Text style={styles.participantName} numberOfLines={1}>
-                  {participant.profile.user_id}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
+                  </View>
+                );
+              })}
+            </View>
 
-        <View style={styles.metaRow}>
-          <Text style={styles.timer}>{formatDuration(elapsed)}</Text>
-          <View style={styles.messageArea}>
-            <Text style={styles.prompt}>▮ Where did you go?</Text>
-            <Text style={styles.prompt}>▮ Can you type here～</Text>
-            <TextInput
-              value={message}
-              onChangeText={setMessage}
-              placeholder="Aa"
-              style={styles.messageInput}
-            />
+            <View style={styles.promptArea}>
+              <Text style={styles.prompt}>▮ Where did you go?</Text>
+              <Text style={styles.prompt}>▮ Can you type here～</Text>
+            </View>
           </View>
-        </View>
 
-        {status !== "joined" && (
-          <View style={styles.statusRow}>
-            {status === "connecting" && (
-              <ActivityIndicator color={colors.brandStrong} />
-            )}
-            <Text style={styles.statusText}>
-              {status === "connecting" ? "Connecting…" : error}
+          <View style={styles.metaRow}>
+            <Text
+              style={styles.timer}
+              accessibilityLabel={`${remainingSeconds} seconds remaining`}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              allowFontScaling={false}
+            >
+              {formatDuration(remainingSeconds)}
             </Text>
+            <View style={styles.messageArea}>
+              <Text style={styles.location}>Cologne, Germany</Text>
+              <TextInput
+                value={message}
+                onChangeText={setMessage}
+                placeholder="Aa"
+                style={styles.messageInput}
+              />
+            </View>
           </View>
-        )}
-      </ScrollView>
+
+          {status !== "joined" && (
+            <View style={styles.statusRow}>
+              {status === "connecting" && (
+                <ActivityIndicator color={colors.brandStrong} />
+              )}
+              <Text style={styles.statusText}>
+                {status === "connecting" ? "Connecting…" : error}
+              </Text>
+            </View>
+          )}
+        </View>
+      </View>
 
       <View
         style={[
           styles.controls,
-          { paddingBottom: Math.max(insets.bottom, 10) },
+          {
+            height: 72 + insets.bottom,
+            paddingBottom: insets.bottom,
+          },
         ]}
       >
-        <Pressable
-          style={[styles.roundControl, muted && styles.activeControl]}
-          onPress={toggleMute}
-          accessibilityLabel={muted ? "Unmute microphone" : "Mute microphone"}
-        >
-          <Ionicons name={muted ? "mic-off" : "mic"} size={22} color="#666" />
-        </Pressable>
+        <MicSwitch
+          muted={muted}
+          onChange={applyMuted}
+          disabled={status === "error"}
+        />
         <Pressable style={styles.roundControl} accessibilityLabel="Reaction">
           <Ionicons name="happy-outline" size={25} color="#666" />
         </Pressable>
@@ -367,7 +415,7 @@ export default function EventCallPage() {
           <Text style={styles.leaveText}>Leave</Text>
         </Pressable>
         <Pressable
-          style={styles.reportButton}
+          style={styles.roundControl}
           onPress={() => setReportStage("pick")}
           accessibilityLabel="Report a participant"
         >
@@ -561,56 +609,117 @@ function ReportFlow({
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#FFF" },
-  content: { paddingHorizontal: 22, paddingBottom: 18 },
+  content: {
+    flex: 1,
+    paddingHorizontal: 22,
+    paddingBottom: 8,
+    gap: 10,
+  },
   topicCard: {
-    minHeight: 235,
+    flex: 1,
+    minHeight: 0,
     borderWidth: 1,
     borderColor: "#777",
-    borderRadius: 18,
-    padding: 18,
+    borderRadius: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 22,
+    overflow: "hidden",
   },
-  label: { fontSize: 17, fontWeight: "700", color: "#111" },
-  topic: { marginTop: 4, fontSize: 14, color: "#222" },
+  topicWatermark: {
+    position: "absolute",
+    left: "50%",
+    bottom: 22,
+    marginLeft: -75,
+    opacity: 0.09,
+  },
+  label: { fontSize: 20, fontWeight: "700", color: "#111" },
+  topic: { marginTop: 4, fontSize: 14, lineHeight: 17, color: "#222" },
   descriptionLabel: { marginTop: 18 },
-  description: { marginTop: 7, fontSize: 14, lineHeight: 19, color: "#333" },
-  participantGrid: { flexDirection: "row", flexWrap: "wrap", marginTop: 14 },
-  participantCell: { width: "33.333%", alignItems: "center", marginBottom: 10 },
+  description: { marginTop: 7, fontSize: 13, lineHeight: 16, color: "#222" },
+  callDetails: {
+    // 固定底部白色資訊區；Topic 卡只使用上方剩餘高度。
+    height: 166,
+  },
+  participantsAndPrompts: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "flex-end",
+  },
+  participantGrid: {
+    width: "50%",
+    height: 104,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignContent: "space-between",
+  },
+  participantCell: {
+    width: "33.333%",
+    height: 52,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   avatarWrap: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: "center",
     justifyContent: "center",
     overflow: "visible",
   },
-  avatar: { width: 58, height: 58, borderRadius: 29 },
+  avatar: { width: 46, height: 46, borderRadius: 23 },
   mutedBadge: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 31,
-    borderWidth: 3,
+    borderRadius: 24,
+    borderWidth: 2.5,
     borderColor: "#FF343C",
     backgroundColor: "rgba(255,255,255,0.72)",
     alignItems: "center",
     justifyContent: "center",
   },
-  participantName: { maxWidth: 90, marginTop: 3, fontSize: 11, color: "#666" },
-  metaRow: { flexDirection: "row", alignItems: "flex-end", marginTop: 4 },
+  flagBadge: {
+    position: "absolute",
+    right: -2,
+    bottom: -1,
+  },
+  flagText: {
+    fontSize: 13,
+    lineHeight: 16,
+  },
+  promptArea: {
+    flex: 1,
+    justifyContent: "flex-end",
+    paddingLeft: 4,
+    paddingBottom: 4,
+  },
+  metaRow: {
+    height: 62,
+    flexDirection: "row",
+    alignItems: "flex-end",
+  },
   timer: {
-    fontSize: 43,
-    lineHeight: 48,
-    fontWeight: "800",
-    letterSpacing: -1,
+    width: "50%",
+    fontSize: 58,
+    lineHeight: 62,
+    fontWeight: "900",
+    letterSpacing: -2,
     color: "#050505",
   },
-  messageArea: { flex: 1, marginLeft: 12 },
+  messageArea: { flex: 1, paddingLeft: 4, paddingBottom: 3 },
   prompt: { fontSize: 11, color: "#777", marginBottom: 3 },
+  location: {
+    marginBottom: 5,
+    textAlign: "right",
+    fontSize: 11,
+    color: "#C3C3C3",
+  },
   messageInput: {
-    height: 27,
+    height: 21,
     borderWidth: 1,
     borderColor: "#AAA",
-    borderRadius: 6,
+    borderRadius: 5,
     paddingHorizontal: 8,
-    fontSize: 12,
+    paddingVertical: 0,
+    fontSize: 11,
   },
   statusRow: {
     flexDirection: "row",
@@ -621,44 +730,34 @@ const styles = StyleSheet.create({
   },
   statusText: { color: "#666" },
   controls: {
-    minHeight: 75,
+    minHeight: 72,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    paddingHorizontal: 14,
-    paddingTop: 10,
-    backgroundColor: "#5C5C5C",
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    paddingHorizontal: 22,
+    backgroundColor: "#5B5B5B",
+    borderTopLeftRadius: 34,
+    borderTopRightRadius: 34,
   },
   roundControl: {
-    width: 50,
-    height: 34,
-    borderRadius: 18,
-    backgroundColor: "#EEE",
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "#F4F4F4",
     alignItems: "center",
     justifyContent: "center",
   },
-  activeControl: { backgroundColor: "#FFD9DB" },
   spacer: { flex: 1 },
   leaveButton: {
-    minWidth: 82,
-    height: 42,
-    paddingHorizontal: 18,
-    borderRadius: 22,
-    backgroundColor: "#EEE",
+    minWidth: 72,
+    height: 40,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: "#E8E8E8",
     alignItems: "center",
     justifyContent: "center",
   },
-  leaveText: { fontSize: 16, color: "#666" },
-  reportButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: "#EEE",
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  leaveText: { fontSize: 14, color: "#666666" },
   modalBackdrop: {
     flex: 1,
     padding: 20,
