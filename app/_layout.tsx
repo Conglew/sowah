@@ -105,6 +105,10 @@ export default function RootLayout() {
                 name="match-call/[matchUid]"
                 options={{ headerShown: false }}
               />
+              <Stack.Screen
+                name="event-call/[eventUid]"
+                options={{ headerShown: false }}
+              />
             </Stack.Protected>
           </Stack>
 

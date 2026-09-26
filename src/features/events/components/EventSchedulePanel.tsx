@@ -1,5 +1,6 @@
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
+import { useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -83,6 +84,7 @@ type ScheduleEvent = {
   participants: MockParticipant[];
   participantCount?: number;
   creatorUid?: string;
+  kind?: EventResource["kind"];
 };
 const todayId = dayjs().format("YYYY-MM-DD");
 const tomorrowId = dayjs().add(1, "day").format("YYYY-MM-DD");
@@ -339,6 +341,7 @@ function toScheduleEvent(
     maxParticipants: event.capacity,
     participantCount: event.participant_count,
     creatorUid: event.creator_uid,
+    kind: event.kind,
     discussionGuide: event.description,
     participants: [],
   };
@@ -762,6 +765,7 @@ function EventRow({
   onCancelEvent,
   onShareEvent,
 }: EventRowProps) {
+  const router = useRouter();
   const participantText = `${event.participantCount ?? event.participants.length}/${event.maxParticipants}`;
   const isExpired = isEventExpired(event);
   const displayColor = getEventDisplayColor(event);
@@ -946,6 +950,18 @@ function EventRow({
                 </TouchableOpacity>
               </>
             )}
+
+            {event.isJoinedByMe && event.kind === "multiple" && (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={styles.enterCallButton}
+                onPress={() => router.push(`/event-call/${event.id}` as never)}
+                accessibilityRole="button"
+                accessibilityLabel="Enter event voice call"
+              >
+                <Text style={styles.enterCallButtonText}>Enter voice call</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -1113,6 +1129,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
     color: "#A8A8A8",
+  },
+  enterCallButton: {
+    height: 42,
+    marginTop: 12,
+    borderRadius: 12,
+    backgroundColor: colors.brandStrong,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  enterCallButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
   },
   joinButton: {
     flex: 1,

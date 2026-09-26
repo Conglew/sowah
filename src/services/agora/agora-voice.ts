@@ -30,6 +30,9 @@ export type AgoraVoiceListener = {
   onJoined?: (connection: RtcConnection) => void;
   onRemoteUserJoined?: (uid: number) => void;
   onRemoteUserLeft?: (uid: number, reason: UserOfflineReasonType) => void;
+  /** Agora numeric uid 與應用程式 user_uid 的對應。 */
+  onRemoteUserIdentified?: (uid: number, userAccount: string) => void;
+  onRemoteUserMuteChanged?: (uid: number, muted: boolean) => void;
   onLeft?: () => void;
   onError?: (code: ErrorCodeType, message: string) => void;
   onTokenRenewed?: (credentials: AgoraCallCredentials) => void;
@@ -57,6 +60,22 @@ class AgoraVoiceService {
     },
     onUserOffline: (_connection, uid, reason) => {
       this.listener.onRemoteUserLeft?.(uid, reason);
+    },
+    onUserInfoUpdated: (uid, info) => {
+      if (info.userAccount) {
+        this.listener.onRemoteUserIdentified?.(uid, info.userAccount);
+      }
+    },
+    onUserMuteAudio: (_connection, uid, muted) => {
+      try {
+        const userAccount = this.engine?.getUserInfoByUid(uid).userAccount;
+        if (userAccount) {
+          this.listener.onRemoteUserIdentified?.(uid, userAccount);
+        }
+      } catch {
+        // 部分 SDK 版本會在 mapping 尚未建立時丟錯；mute callback 仍照常往上送。
+      }
+      this.listener.onRemoteUserMuteChanged?.(uid, muted);
     },
     onLeaveChannel: () => {
       this.listener.onLeft?.();
